@@ -69,7 +69,8 @@ const parseExcel = async (file: File): Promise<any[]> => {
         // Read with header on row 3 (index 2) - skip first two header rows
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
           range: 2,  // Start from row 3 (0-indexed)
-          defval: '' 
+          defval: '',
+          raw: false // This will convert numbers properly
         });
         
         console.log('Parsed Excel data:', jsonData);
@@ -102,20 +103,52 @@ export const processFiles = async (files: {
     let filteredRiskData = riskData.filter(row => {
       const name = String(row.Name || '').trim();
       const ucc = String(row.UCC || '').trim();
-      return name !== 'CLIENTS' && ucc && ucc !== '';
+      return name !== 'CLIENTS' && ucc && ucc !== '' && ucc !== 'undefined';
     });
 
     console.log('Filtered risk data:', filteredRiskData);
 
-    // Extract relevant columns - handle the specific column names from Flask code
+    // Find the correct column names - they might have different formats
+    const findColumnName = (row: any, possibleNames: string[]): string | null => {
+      for (const name of possibleNames) {
+        if (row.hasOwnProperty(name)) {
+          return name;
+        }
+      }
+      return null;
+    };
+
+    // Extract relevant columns - handle multiple possible column name formats
     const processedRiskData = filteredRiskData.map(row => {
+      console.log('Processing row:', row);
+      
+      // Find column names with various possible formats
+      const mcxCol = findColumnName(row, [
+        'MCX_x000D_\nBalance', 'MCX Balance', 'MCX_Balance', 'MCXBalance',
+        'MCX\nBalance', 'MCX_\nBalance'
+      ]);
+      const nseCmCol = findColumnName(row, [
+        'NSE-CM_x000D_\nBalance', 'NSE-CM Balance', 'NSE_CM_Balance', 'NSECMBalance',
+        'NSE-CM\nBalance', 'NSE-CM_\nBalance'
+      ]);
+      const nseFoCol = findColumnName(row, [
+        'NSE-F&O_x000D_\nBalance', 'NSE-F&O Balance', 'NSE_FO_Balance', 'NSEFOBalance',
+        'NSE-F&O\nBalance', 'NSE-F&O_\nBalance'
+      ]);
+      const nseCdsCol = findColumnName(row, [
+        'NSE-CDS_x000D_\nBalance', 'NSE-CDS Balance', 'NSE_CDS_Balance', 'NSECDSBalance',
+        'NSE-CDS\nBalance', 'NSE-CDS_\nBalance'
+      ]);
+
+      console.log('Found columns:', { mcxCol, nseCmCol, nseFoCol, nseCdsCol });
+
       return {
         UCC: String(row.UCC || '').trim(),
         Name: String(row.Name || ''),
-        MCX_Balance: parseFloat(row['MCX_x000D_\nBalance'] || row['MCX Balance'] || 0) || 0,
-        NSE_CM_Balance: parseFloat(row['NSE-CM_x000D_\nBalance'] || row['NSE-CM Balance'] || 0) || 0,
-        NSE_FO_Balance: parseFloat(row['NSE-F&O_x000D_\nBalance'] || row['NSE-F&O Balance'] || 0) || 0,
-        NSE_CDS_Balance: parseFloat(row['NSE-CDS_x000D_\nBalance'] || row['NSE-CDS Balance'] || 0) || 0,
+        MCX_Balance: parseFloat(row[mcxCol || 'MCX_Balance'] || 0) || 0,
+        NSE_CM_Balance: parseFloat(row[nseCmCol || 'NSE_CM_Balance'] || 0) || 0,
+        NSE_FO_Balance: parseFloat(row[nseFoCol || 'NSE_FO_Balance'] || 0) || 0,
+        NSE_CDS_Balance: parseFloat(row[nseCdsCol || 'NSE_CDS_Balance'] || 0) || 0,
       };
     });
 
@@ -176,7 +209,7 @@ export const processFiles = async (files: {
     const processedData: RiskData[] = processedRiskData.map(riskRow => {
       const ucc = riskRow.UCC;
       
-      // Calculate LED TOTAL as sum of negative balances made positive
+      // Calculate LED TOTAL as sum of negative balances made positive (Flask logic)
       const balances = [
         riskRow.MCX_Balance,
         riskRow.NSE_CM_Balance,

@@ -38,7 +38,7 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 500; // Increased to 500 records per page
 
   const filteredData = useMemo(() => {
     return data.filter(item => {
@@ -70,17 +70,11 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
     );
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
   const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-IN').format(num);
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(num);
   };
 
   return (
@@ -125,7 +119,7 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
       <Card>
         <CardHeader>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-            <CardTitle>Risk Analysis Results</CardTitle>
+            <CardTitle>Risk Analysis Results (Showing {itemsPerPage} records per page)</CardTitle>
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -241,6 +235,9 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
                 >
                   Previous
                 </Button>
+                <span className="flex items-center px-3 text-sm text-slate-600">
+                  Page {currentPage} of {totalPages}
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
