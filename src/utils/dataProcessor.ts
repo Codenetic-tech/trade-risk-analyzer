@@ -66,15 +66,55 @@ const parseExcel = async (file: File): Promise<any[]> => {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         
-        // Read with header on row 3 (index 2) - skip first two header rows
+        // Read all data first, then process it manually to handle the specific column positions
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-          range: 2,  // Start from row 3 (0-indexed)
+          header: 1, // Get raw array data
           defval: '',
-          raw: false // This will convert numbers properly
+          raw: false
         });
         
-        console.log('Parsed Excel data:', jsonData);
-        resolve(jsonData);
+        console.log('Raw Excel data (array format):', jsonData);
+        
+        // Find the header row (row 3, index 2 in 0-based indexing)
+        const headerRowIndex = 2;
+        if (jsonData.length <= headerRowIndex) {
+          throw new Error('Excel file does not have enough rows');
+        }
+        
+        const headers = jsonData[headerRowIndex] as string[];
+        console.log('Headers from row 3:', headers);
+        
+        // Process data rows starting from row 4 (index 3)
+        const processedData = [];
+        for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+          const row = jsonData[i] as any[];
+          if (!row || row.length === 0) continue;
+          
+          const rowObj: any = {};
+          
+          // Map specific columns based on your specification:
+          // UCC is typically in column A (index 0)
+          // Name is typically in column B (index 1)  
+          // MCX Balance is in column C (index 2)
+          // NSE-CM Balance is in column E (index 4)
+          // NSE-F&O Balance is in column G (index 6)
+          // NSE-CDS Balance is in column I (index 8)
+          
+          rowObj.UCC = row[0] ? String(row[0]).trim() : '';
+          rowObj.Name = row[1] ? String(row[1]).trim() : '';
+          rowObj.MCX_Balance = row[2] ? parseFloat(row[2]) : 0;
+          rowObj.NSE_CM_Balance = row[4] ? parseFloat(row[4]) : 0;
+          rowObj.NSE_FO_Balance = row[6] ? parseFloat(row[6]) : 0;
+          rowObj.NSE_CDS_Balance = row[8] ? parseFloat(row[8]) : 0;
+          
+          // Only add rows that have a valid UCC
+          if (rowObj.UCC && rowObj.UCC !== '' && rowObj.UCC !== 'undefined') {
+            processedData.push(rowObj);
+          }
+        }
+        
+        console.log('Processed Excel data with specific column mapping:', processedData);
+        resolve(processedData);
       } catch (error) {
         console.error('Error parsing Excel:', error);
         reject(error);
@@ -108,51 +148,21 @@ export const processFiles = async (files: {
 
     console.log('Filtered risk data:', filteredRiskData);
 
-    // Find the correct column names - they might have different formats
-    const findColumnName = (row: any, possibleNames: string[]): string | null => {
-      for (const name of possibleNames) {
-        if (row.hasOwnProperty(name)) {
-          return name;
-        }
-      }
-      return null;
-    };
-
-    // Extract relevant columns - handle multiple possible column name formats
+    // Extract relevant columns - data is already mapped to the correct structure
     const processedRiskData = filteredRiskData.map(row => {
-      console.log('Processing row:', row);
+      console.log('Processing risk row:', row);
       
-      // Find column names with various possible formats
-      const mcxCol = findColumnName(row, [
-        'MCX_x000D_\nBalance', 'MCX Balance', 'MCX_Balance', 'MCXBalance',
-        'MCX\nBalance', 'MCX_\nBalance'
-      ]);
-      const nseCmCol = findColumnName(row, [
-        'NSE-CM_x000D_\nBalance', 'NSE-CM Balance', 'NSE_CM_Balance', 'NSECMBalance',
-        'NSE-CM\nBalance', 'NSE-CM_\nBalance'
-      ]);
-      const nseFoCol = findColumnName(row, [
-        'NSE-F&O_x000D_\nBalance', 'NSE-F&O Balance', 'NSE_FO_Balance', 'NSEFOBalance',
-        'NSE-F&O\nBalance', 'NSE-F&O_\nBalance'
-      ]);
-      const nseCdsCol = findColumnName(row, [
-        'NSE-CDS_x000D_\nBalance', 'NSE-CDS Balance', 'NSE_CDS_Balance', 'NSECDSBalance',
-        'NSE-CDS\nBalance', 'NSE-CDS_\nBalance'
-      ]);
-
-      console.log('Found columns:', { mcxCol, nseCmCol, nseFoCol, nseCdsCol });
-
       return {
         UCC: String(row.UCC || '').trim(),
         Name: String(row.Name || ''),
-        MCX_Balance: parseFloat(row[mcxCol || 'MCX_Balance'] || 0) || 0,
-        NSE_CM_Balance: parseFloat(row[nseCmCol || 'NSE_CM_Balance'] || 0) || 0,
-        NSE_FO_Balance: parseFloat(row[nseFoCol || 'NSE_FO_Balance'] || 0) || 0,
-        NSE_CDS_Balance: parseFloat(row[nseCdsCol || 'NSE_CDS_Balance'] || 0) || 0,
+        MCX_Balance: isNaN(row.MCX_Balance) ? 0 : row.MCX_Balance,
+        NSE_CM_Balance: isNaN(row.NSE_CM_Balance) ? 0 : row.NSE_CM_Balance,
+        NSE_FO_Balance: isNaN(row.NSE_FO_Balance) ? 0 : row.NSE_FO_Balance,
+        NSE_CDS_Balance: isNaN(row.NSE_CDS_Balance) ? 0 : row.NSE_CDS_Balance,
       };
     });
 
-    console.log('Processed risk data:', processedRiskData);
+    console.log('Processed risk data with balance values:', processedRiskData);
 
     // Process NSE CSV file
     let nseAllocations: { [key: string]: { FO: number; CM: number; CD: number } } = {};
@@ -161,9 +171,10 @@ export const processFiles = async (files: {
       const nseData = parseCSV(nseText);
       console.log('NSE CSV data:', nseData);
       
-      // Filter and process NSE data
+      // Filter and process NSE data - using pivot logic from Flask
       const validNseData = nseData.filter(row => row.Clicode && row.Clicode.trim());
       
+      // Group by Clicode and Segments, sum Allocated values
       validNseData.forEach(row => {
         const ucc = String(row.Clicode).trim();
         const segment = String(row.Segments || '').trim();
@@ -188,9 +199,10 @@ export const processFiles = async (files: {
       const mcxData = parseCSV(mcxText);
       console.log('MCX CSV data:', mcxData);
       
-      // Filter and process MCX data
+      // Filter and process MCX data - using pivot logic from Flask
       const validMcxData = mcxData.filter(row => row.Clicode && row.Clicode.trim());
       
+      // Group by Clicode, sum Allocated values for CO segment
       validMcxData.forEach(row => {
         const ucc = String(row.Clicode).trim();
         const allocated = parseFloat(row.Allocated) || 0;
@@ -259,7 +271,7 @@ export const processFiles = async (files: {
       };
     });
 
-    console.log('Final processed data:', processedData);
+    console.log('Final processed data with correct balance values:', processedData);
 
     // Calculate summary
     const summary = {
