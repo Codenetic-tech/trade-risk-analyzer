@@ -1,4 +1,6 @@
 
+import * as XLSX from 'xlsx';
+
 export interface RiskData {
   ucc: string;
   mcxBalance: number;
@@ -53,39 +55,33 @@ const parseCSV = (csvText: string): any[] => {
   return data;
 };
 
-// Helper function to parse Excel (simplified - in real app would use xlsx library)
+// Helper function to parse Excel using xlsx library
 const parseExcel = async (file: File): Promise<any[]> => {
-  // For demo purposes, we'll simulate Excel parsing
-  // In real implementation, you'd use libraries like xlsx or exceljs
-  console.log('Parsing Excel file:', file.name);
-  
-  // Mock Excel data structure based on the Python code expectations
-  return [
-    {
-      UCC: 'UCC001',
-      Name: 'Client A',
-      'MCX_x000D_\nBalance': -150000,
-      'NSE-CM_x000D_\nBalance': -50000,
-      'NSE-F&O_x000D_\nBalance': -100000,
-      'NSE-CDS_x000D_\nBalance': 0,
-    },
-    {
-      UCC: 'UCC002',
-      Name: 'Client B',
-      'MCX_x000D_\nBalance': 0,
-      'NSE-CM_x000D_\nBalance': -80000,
-      'NSE-F&O_x000D_\nBalance': -120000,
-      'NSE-CDS_x000D_\nBalance': 0,
-    },
-    {
-      UCC: 'UCC003',
-      Name: 'Client C',
-      'MCX_x000D_\nBalance': -75000,
-      'NSE-CM_x000D_\nBalance': 0,
-      'NSE-F&O_x000D_\nBalance': 0,
-      'NSE-CDS_x000D_\nBalance': 0,
-    },
-  ];
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Read with header on row 3 (index 2) - skip first two header rows
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          range: 2,  // Start from row 3 (0-indexed)
+          defval: '' 
+        });
+        
+        console.log('Parsed Excel data:', jsonData);
+        resolve(jsonData);
+      } catch (error) {
+        console.error('Error parsing Excel:', error);
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read Excel file'));
+    reader.readAsArrayBuffer(file);
+  });
 };
 
 export const processFiles = async (files: {
@@ -100,76 +96,97 @@ export const processFiles = async (files: {
   try {
     // Process Risk Excel file
     const riskData = await parseExcel(files.risk);
+    console.log('Raw risk data:', riskData);
     
-    // Filter out CLIENTS summary rows and rows without UCC
-    const filteredRiskData = riskData
-      .filter(row => row.Name !== 'CLIENTS' && row.UCC)
-      .map(row => ({
-        UCC: String(row.UCC).trim(),
-        Name: row.Name || '',
-        MCX_Balance: parseFloat(row['MCX_x000D_\nBalance']) || 0,
-        NSE_CM_Balance: parseFloat(row['NSE-CM_x000D_\nBalance']) || 0,
-        NSE_FO_Balance: parseFloat(row['NSE-F&O_x000D_\nBalance']) || 0,
-        NSE_CDS_Balance: parseFloat(row['NSE-CDS_x000D_\nBalance']) || 0,
-      }));
+    // Remove any summary or 'CLIENTS' rows and drop rows without UCC
+    let filteredRiskData = riskData.filter(row => {
+      const name = String(row.Name || '').trim();
+      const ucc = String(row.UCC || '').trim();
+      return name !== 'CLIENTS' && ucc && ucc !== '';
+    });
+
+    console.log('Filtered risk data:', filteredRiskData);
+
+    // Extract relevant columns - handle the specific column names from Flask code
+    const processedRiskData = filteredRiskData.map(row => {
+      return {
+        UCC: String(row.UCC || '').trim(),
+        Name: String(row.Name || ''),
+        MCX_Balance: parseFloat(row['MCX_x000D_\nBalance'] || row['MCX Balance'] || 0) || 0,
+        NSE_CM_Balance: parseFloat(row['NSE-CM_x000D_\nBalance'] || row['NSE-CM Balance'] || 0) || 0,
+        NSE_FO_Balance: parseFloat(row['NSE-F&O_x000D_\nBalance'] || row['NSE-F&O Balance'] || 0) || 0,
+        NSE_CDS_Balance: parseFloat(row['NSE-CDS_x000D_\nBalance'] || row['NSE-CDS Balance'] || 0) || 0,
+      };
+    });
+
+    console.log('Processed risk data:', processedRiskData);
 
     // Process NSE CSV file
     let nseAllocations: { [key: string]: { FO: number; CM: number; CD: number } } = {};
     if (files.nse) {
       const nseText = await files.nse.text();
       const nseData = parseCSV(nseText);
+      console.log('NSE CSV data:', nseData);
       
-      nseData
-        .filter(row => row.Clicode)
-        .forEach(row => {
-          const ucc = String(row.Clicode).trim();
-          const segment = row.Segments;
-          const allocated = parseFloat(row.Allocated) || 0;
-          
-          if (!nseAllocations[ucc]) {
-            nseAllocations[ucc] = { FO: 0, CM: 0, CD: 0 };
-          }
-          
-          if (segment === 'FO') nseAllocations[ucc].FO += allocated;
-          if (segment === 'CM') nseAllocations[ucc].CM += allocated;
-          if (segment === 'CD') nseAllocations[ucc].CD += allocated;
-        });
+      // Filter and process NSE data
+      const validNseData = nseData.filter(row => row.Clicode && row.Clicode.trim());
+      
+      validNseData.forEach(row => {
+        const ucc = String(row.Clicode).trim();
+        const segment = String(row.Segments || '').trim();
+        const allocated = parseFloat(row.Allocated) || 0;
+        
+        if (!nseAllocations[ucc]) {
+          nseAllocations[ucc] = { FO: 0, CM: 0, CD: 0 };
+        }
+        
+        if (segment === 'FO') nseAllocations[ucc].FO += allocated;
+        if (segment === 'CM') nseAllocations[ucc].CM += allocated;
+        if (segment === 'CD') nseAllocations[ucc].CD += allocated;
+      });
     }
+
+    console.log('NSE allocations:', nseAllocations);
 
     // Process MCX CSV file
     let mcxAllocations: { [key: string]: { CO: number } } = {};
     if (files.mcx) {
       const mcxText = await files.mcx.text();
       const mcxData = parseCSV(mcxText);
+      console.log('MCX CSV data:', mcxData);
       
-      mcxData
-        .filter(row => row.Clicode)
-        .forEach(row => {
-          const ucc = String(row.Clicode).trim();
-          const allocated = parseFloat(row.Allocated) || 0;
-          
-          if (!mcxAllocations[ucc]) {
-            mcxAllocations[ucc] = { CO: 0 };
-          }
-          
-          mcxAllocations[ucc].CO += allocated;
-        });
+      // Filter and process MCX data
+      const validMcxData = mcxData.filter(row => row.Clicode && row.Clicode.trim());
+      
+      validMcxData.forEach(row => {
+        const ucc = String(row.Clicode).trim();
+        const allocated = parseFloat(row.Allocated) || 0;
+        
+        if (!mcxAllocations[ucc]) {
+          mcxAllocations[ucc] = { CO: 0 };
+        }
+        
+        mcxAllocations[ucc].CO += allocated;
+      });
     }
 
-    // Process each risk record
-    const processedData: RiskData[] = filteredRiskData.map(riskRow => {
+    console.log('MCX allocations:', mcxAllocations);
+
+    // Process each risk record following Flask logic exactly
+    const processedData: RiskData[] = processedRiskData.map(riskRow => {
       const ucc = riskRow.UCC;
       
-      // Calculate LED TOTAL (sum of negative balances made positive)
+      // Calculate LED TOTAL as sum of negative balances made positive
       const balances = [
         riskRow.MCX_Balance,
         riskRow.NSE_CM_Balance,
         riskRow.NSE_FO_Balance,
         riskRow.NSE_CDS_Balance
       ];
-      const ledTotal = balances
-        .filter(balance => balance < 0)
-        .reduce((sum, balance) => sum + Math.abs(balance), 0);
+      
+      // Sum of negative balances, then make positive (Flask logic: -total_neg)
+      const totalNeg = balances.filter(balance => balance < 0).reduce((sum, balance) => sum + balance, 0);
+      const ledTotal = -totalNeg; // make positive
 
       // Get allocations
       const nseAlloc = nseAllocations[ucc] || { FO: 0, CM: 0, CD: 0 };
@@ -178,7 +195,7 @@ export const processFiles = async (files: {
       // Calculate ALLOC TOTAL
       const allocTotal = nseAlloc.FO + nseAlloc.CM + nseAlloc.CD + mcxAlloc.CO;
 
-      // Calculate DIFF
+      // Calculate DIFF (ALLOC TOTAL minus LED TOTAL)
       const diff = allocTotal - ledTotal;
 
       // Determine STATUS
@@ -208,6 +225,8 @@ export const processFiles = async (files: {
         clientName: riskRow.Name,
       };
     });
+
+    console.log('Final processed data:', processedData);
 
     // Calculate summary
     const summary = {
