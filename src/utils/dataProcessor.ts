@@ -93,8 +93,8 @@ const parseExcel = async (file: File): Promise<any[]> => {
           const rowObj: any = {};
           
           // Map specific columns based on your specification:
-          // UCC is typically in column A (index 0)
-          // Name is typically in column B (index 1)  
+          // UCC is in column A (index 0) - this is the client code
+          // Name is in column B (index 1)  
           // MCX Balance is in column C (index 2)
           // NSE-CM Balance is in column E (index 4)
           // NSE-F&O Balance is in column G (index 6)
@@ -219,8 +219,12 @@ export const processFiles = async (files: {
 
     // Process each risk record following Flask logic exactly
     const processedData: RiskData[] = processedRiskData.map(riskRow => {
-      // Use UCC from risk data to match with allocations
+      // Use UCC from risk data (column A) to match with allocations - this is the client code
       const ucc = riskRow.UCC;
+      
+      console.log(`Processing UCC: ${ucc}`);
+      console.log(`Looking for NSE allocation for ${ucc}:`, nseAllocations[ucc]);
+      console.log(`Looking for MCX allocation for ${ucc}:`, mcxAllocations[ucc]);
       
       // Calculate LED TOTAL as sum of negative balances made positive (Flask logic)
       const balances = [
@@ -237,6 +241,8 @@ export const processFiles = async (files: {
       // Get allocations using the UCC from risk data
       const nseAlloc = nseAllocations[ucc] || { FO: 0, CM: 0, CD: 0 };
       const mcxAlloc = mcxAllocations[ucc] || { CO: 0 };
+
+      console.log(`Final allocations for ${ucc}:`, { nseAlloc, mcxAlloc });
 
       // Calculate ALLOC TOTAL
       const allocTotal = nseAlloc.FO + nseAlloc.CM + nseAlloc.CD + mcxAlloc.CO;
