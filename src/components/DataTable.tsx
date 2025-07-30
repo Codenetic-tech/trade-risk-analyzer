@@ -57,12 +57,6 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
   const getStatusBadge = (status: string) => {
-    const variants = {
-      'NIL': 'default',
-      'EXCESS': 'destructive',
-      'SHORT': 'secondary',
-    } as const;
-
     const colors = {
       'NIL': 'bg-green-100 text-green-800 hover:bg-green-200',
       'EXCESS': 'bg-red-100 text-red-800 hover:bg-red-200',
@@ -83,6 +77,10 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-IN').format(num);
   };
 
   return (
@@ -123,7 +121,7 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
         </Card>
       </div>
 
-      {/* Filters and Actions */}
+      {/* Main Table */}
       <Card>
         <CardHeader>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
@@ -167,33 +165,61 @@ const DataTable: React.FC<DataTableProps> = ({ data, summary }) => {
                 <TableRow>
                   <TableHead>UCC</TableHead>
                   <TableHead>Client Name</TableHead>
-                  <TableHead className="text-right">LED Total</TableHead>
-                  <TableHead className="text-right">Alloc Total</TableHead>
-                  <TableHead className="text-right">Difference</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Exchange</TableHead>
-                  <TableHead>Segment</TableHead>
+                  <TableHead className="text-right">MCX Balance</TableHead>
+                  <TableHead className="text-right">NSE-CM Balance</TableHead>
+                  <TableHead className="text-right">NSE-F&O Balance</TableHead>
+                  <TableHead className="text-right">NSE-CDS Balance</TableHead>
+                  <TableHead className="text-right">LED TOTAL</TableHead>
+                  <TableHead className="text-right">FO</TableHead>
+                  <TableHead className="text-right">CM</TableHead>
+                  <TableHead className="text-right">CD</TableHead>
+                  <TableHead className="text-right">CO</TableHead>
+                  <TableHead className="text-right">ALLOC TOTAL</TableHead>
+                  <TableHead>STATUS</TableHead>
+                  <TableHead className="text-right">DIFF</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedData.map((row, index) => (
+                {paginatedData.map((row) => (
                   <TableRow key={row.ucc} className="hover:bg-slate-50">
                     <TableCell className="font-medium">{row.ucc}</TableCell>
                     <TableCell>{row.clientName}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(row.ledTotal)}
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.mcxBalance)}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(row.allocTotal)}
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.nseCmBalance)}
                     </TableCell>
-                    <TableCell className={`text-right font-mono ${
-                      row.diff > 0 ? 'text-red-600' : row.diff < 0 ? 'text-yellow-600' : 'text-green-600'
-                    }`}>
-                      {formatCurrency(row.diff)}
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.nseFoBalance)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.nseCdsBalance)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm font-semibold text-blue-600">
+                      {formatNumber(row.ledTotal)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.fo)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.cm)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.cd)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatNumber(row.co)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm font-semibold text-purple-600">
+                      {formatNumber(row.allocTotal)}
                     </TableCell>
                     <TableCell>{getStatusBadge(row.status)}</TableCell>
-                    <TableCell>{row.exchange}</TableCell>
-                    <TableCell>{row.segment}</TableCell>
+                    <TableCell className={`text-right font-mono text-sm font-semibold ${
+                      row.diff > 0 ? 'text-red-600' : row.diff < 0 ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                      {formatNumber(row.diff)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
