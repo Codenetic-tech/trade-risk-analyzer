@@ -56,11 +56,12 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
   const location = useLocation();
   const currentPath = location.pathname;
 
   const isActive = (path: string) => currentPath === path;
+  const isCollapsed = state === 'collapsed';
 
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive 
@@ -68,7 +69,7 @@ export function AppSidebar() {
       : "hover:bg-slate-100 text-slate-700";
 
   return (
-    <Sidebar className={collapsed ? "w-14" : "w-64"} collapsible>
+    <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-white border-r border-slate-200">
         {/* Logo Section */}
         <div className="p-4 border-b border-slate-200">
@@ -76,7 +77,7 @@ export function AppSidebar() {
             <div className="p-2 bg-blue-600 rounded-lg">
               <Shield className="h-5 w-5 text-white" />
             </div>
-            {!collapsed && (
+            {!isCollapsed && (
               <div>
                 <h2 className="font-bold text-slate-800">RMS</h2>
                 <p className="text-xs text-slate-500">Risk Management</p>
@@ -87,7 +88,7 @@ export function AppSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            {!collapsed && 'Navigation'}
+            {!isCollapsed && 'Navigation'}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -99,7 +100,7 @@ export function AppSidebar() {
                       className={getNavCls}
                     >
                       <item.icon className="h-5 w-5" />
-                      {!collapsed && <span className="ml-3">{item.title}</span>}
+                      {!isCollapsed && <span className="ml-3">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
