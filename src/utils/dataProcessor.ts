@@ -219,6 +219,7 @@ export const processFiles = async (files: {
 
     // Process each risk record following Flask logic exactly
     const processedData: RiskData[] = processedRiskData.map(riskRow => {
+      // Use UCC from risk data to match with allocations
       const ucc = riskRow.UCC;
       
       // Calculate LED TOTAL as sum of negative balances made positive (Flask logic)
@@ -233,7 +234,7 @@ export const processFiles = async (files: {
       const totalNeg = balances.filter(balance => balance < 0).reduce((sum, balance) => sum + balance, 0);
       const ledTotal = -totalNeg; // make positive
 
-      // Get allocations
+      // Get allocations using the UCC from risk data
       const nseAlloc = nseAllocations[ucc] || { FO: 0, CM: 0, CD: 0 };
       const mcxAlloc = mcxAllocations[ucc] || { CO: 0 };
 
@@ -271,7 +272,7 @@ export const processFiles = async (files: {
       };
     });
 
-    console.log('Final processed data with correct balance values:', processedData);
+    console.log('Final processed data with correct allocation values:', processedData);
 
     // Calculate summary
     const summary = {
