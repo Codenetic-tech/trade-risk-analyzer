@@ -1,4 +1,3 @@
-
 import * as XLSX from 'xlsx';
 
 export interface RiskData {
@@ -92,16 +91,16 @@ const parseExcel = async (file: File): Promise<any[]> => {
           
           const rowObj: any = {};
           
-          // Map specific columns based on your specification:
-          // UCC is in column A (index 0) - this is the client code
-          // Name is in column B (index 1)  
+          // Map specific columns based on corrected specification:
+          // Client Name is in column A (index 0)
+          // UCC is in column B (index 1) - this is the client code that matches Clicode
           // MCX Balance is in column C (index 2)
           // NSE-CM Balance is in column E (index 4)
           // NSE-F&O Balance is in column G (index 6)
           // NSE-CDS Balance is in column I (index 8)
           
-          rowObj.UCC = row[0] ? String(row[0]).trim() : '';
-          rowObj.Name = row[1] ? String(row[1]).trim() : '';
+          rowObj.Name = row[0] ? String(row[0]).trim() : '';
+          rowObj.UCC = row[1] ? String(row[1]).trim() : '';
           rowObj.MCX_Balance = row[2] ? parseFloat(row[2]) : 0;
           rowObj.NSE_CM_Balance = row[4] ? parseFloat(row[4]) : 0;
           rowObj.NSE_FO_Balance = row[6] ? parseFloat(row[6]) : 0;
@@ -113,7 +112,7 @@ const parseExcel = async (file: File): Promise<any[]> => {
           }
         }
         
-        console.log('Processed Excel data with specific column mapping:', processedData);
+        console.log('Processed Excel data with corrected column mapping:', processedData);
         resolve(processedData);
       } catch (error) {
         console.error('Error parsing Excel:', error);
@@ -219,7 +218,7 @@ export const processFiles = async (files: {
 
     // Process each risk record following Flask logic exactly
     const processedData: RiskData[] = processedRiskData.map(riskRow => {
-      // Use UCC from risk data (column A) to match with allocations - this is the client code
+      // Use UCC from risk data (column B) to match with allocations - this is the client code
       const ucc = riskRow.UCC;
       
       console.log(`Processing UCC: ${ucc}`);
