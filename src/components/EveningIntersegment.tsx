@@ -2,10 +2,18 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { Upload, Download, FileSpreadsheet, Calculator } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import * as XLSX from 'xlsx';
 
 interface KambalaData {
   Entity: string;
@@ -38,28 +46,60 @@ const EveningIntersegment: React.FC = () => {
     }
   };
 
-  const parseCSV = (csvText: string): any[] => {
-    const lines = csvText.split('\n');
-    if (lines.length < 2) return [];
-    
-    const headers = lines[0].split('\t').map(h => h.trim().replace(/"/g, ''));
-    const data = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      
-      const values = line.split('\t').map(v => v.trim().replace(/"/g, '').replace(/,/g, ''));
-      if (values.length === headers.length) {
-        const row: any = {};
-        headers.forEach((header, index) => {
-          row[header] = values[index];
-        });
-        data.push(row);
-      }
-    }
-    
-    return data;
+  const parseExcel = async (file: File): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: '',
+            raw: false
+          });
+          
+          console.log('Raw Excel data:', jsonData);
+          
+          // Find header row and process data
+          const headerRowIndex = jsonData.findIndex((row: any) => 
+            Array.isArray(row) && row.some((cell: any) => 
+              String(cell).toLowerCase().includes('entity') || 
+              String(cell).toLowerCase().includes('code')
+            )
+          );
+          
+          if (headerRowIndex === -1) {
+            throw new Error('Could not find header row in Excel file');
+          }
+          
+          const headers = jsonData[headerRowIndex] as string[];
+          const processedData = [];
+          
+          for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+            const row = jsonData[i] as any[];
+            if (!row || row.length === 0) continue;
+            
+            const rowObj: any = {};
+            headers.forEach((header, index) => {
+              rowObj[header] = row[index] || '';
+            });
+            
+            processedData.push(rowObj);
+          }
+          
+          resolve(processedData);
+        } catch (error) {
+          console.error('Error parsing Excel:', error);
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read Excel file'));
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const processFiles = async () => {
@@ -75,14 +115,24 @@ const EveningIntersegment: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Parse Kambala file
-      const kambalaText = await kambalaFile.text();
-      const kambalaData = parseCSV(kambalaText);
+      // Parse Kambala Excel file
+      const kambalaData = await parseExcel(kambalaFile);
       console.log('Kambala data:', kambalaData);
 
-      // Parse code file
-      const codeText = await codeFile.text();
-      const codes = codeText.split('\n').map(line => line.trim()).filter(line => line);
+      // Parse code Excel file
+      const codeData = await parseExcel(codeFile);
+      console.log('Code data:', codeData);
+      
+      // Extract codes from the code file (assuming codes are in the first column)
+      const codes = codeData
+        .map(row => {
+          // Get the first non-empty value from the row
+          const values = Object.values(row);
+          return values.find(val => val && String(val).trim()) as string;
+        })
+        .filter(code => code && String(code).trim())
+        .map(code => String(code).trim());
+      
       setIntersegmentCodes(codes);
       console.log('Intersegment codes:', codes);
 
@@ -91,22 +141,33 @@ const EveningIntersegment: React.FC = () => {
       
       // Process and calculate margins
       const processedKambalaData: KambalaData[] = filteredData.map(row => {
-        const availableMargin = parseFloat(row['Available Margin'] || '0');
+        const parseValue = (value: any): number => {
+          if (typeof value === 'number') return value;
+          if (typeof value === 'string') {
+            // Remove commas and parse
+            const cleaned = value.replace(/,/g, '');
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) ? 0 : parsed;
+          }
+          return 0;
+        };
+
+        const availableMargin = parseValue(row['Available Margin']);
         const margin99 = Math.round(availableMargin * 0.99);
         const margin1 = Math.round(availableMargin * 0.01);
 
         return {
-          Entity: row.Entity || '',
-          Level: row.Level || '',
-          Profile: row.Profile || '',
-          Cash: parseFloat(row.Cash?.replace(/,/g, '') || '0'),
-          Payin: parseFloat(row.Payin?.replace(/,/g, '') || '0'),
-          UnclearedCash: parseFloat(row.UnclearedCash?.replace(/,/g, '') || '0'),
-          TOTAL: parseFloat(row.TOTAL?.replace(/,/g, '') || '0'),
+          Entity: String(row.Entity || ''),
+          Level: String(row.Level || ''),
+          Profile: String(row.Profile || ''),
+          Cash: parseValue(row.Cash),
+          Payin: parseValue(row.Payin),
+          UnclearedCash: parseValue(row.UnclearedCash),
+          TOTAL: parseValue(row.TOTAL),
           AvailableMargin: availableMargin,
-          MarginUsed: parseFloat(row.MarginUsed?.replace(/,/g, '') || '0'),
-          AvailableCheck: parseFloat(row['Available check']?.replace(/,/g, '') || '0'),
-          CollateralTotal: parseFloat(row['Collateral(Total)']?.replace(/,/g, '') || '0'),
+          MarginUsed: parseValue(row.MarginUsed),
+          AvailableCheck: parseValue(row['Available check']),
+          CollateralTotal: parseValue(row['Collateral(Total)']),
           margin99,
           margin1
         };
@@ -193,7 +254,7 @@ const EveningIntersegment: React.FC = () => {
       <div className="border-b border-slate-200 pb-6">
         <h1 className="text-3xl font-bold text-slate-800">Evening Intersegment</h1>
         <p className="text-slate-600 mt-2">
-          Process Kambala file with Evening Intersegment codes and generate globe files
+          Process Kambala Excel file with Evening Intersegment codes and generate globe files
         </p>
       </div>
 
@@ -205,7 +266,7 @@ const EveningIntersegment: React.FC = () => {
               <FileSpreadsheet className="h-5 w-5 text-blue-600" />
               <span>Kambala File</span>
             </CardTitle>
-            <CardDescription>Upload the Kambala file (.txt or .csv)</CardDescription>
+            <CardDescription>Upload the Kambala Excel file (.xlsx)</CardDescription>
           </CardHeader>
           <CardContent>
             {kambalaFile ? (
@@ -224,7 +285,7 @@ const EveningIntersegment: React.FC = () => {
                 <input
                   id="kambala-upload"
                   type="file"
-                  accept=".txt,.csv"
+                  accept=".xlsx,.xls"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -242,7 +303,7 @@ const EveningIntersegment: React.FC = () => {
               <FileSpreadsheet className="h-5 w-5 text-purple-600" />
               <span>Evening Intersegment Code File</span>
             </CardTitle>
-            <CardDescription>Upload the code file (.txt)</CardDescription>
+            <CardDescription>Upload the code Excel file (.xlsx)</CardDescription>
           </CardHeader>
           <CardContent>
             {codeFile ? (
@@ -261,7 +322,7 @@ const EveningIntersegment: React.FC = () => {
                 <input
                   id="code-upload"
                   type="file"
-                  accept=".txt"
+                  accept=".xlsx,.xls"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -306,44 +367,44 @@ const EveningIntersegment: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-slate-300">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-slate-300 px-4 py-2 text-left">Entity</th>
-                    <th className="border border-slate-300 px-4 py-2 text-left">Level</th>
-                    <th className="border border-slate-300 px-4 py-2 text-left">Profile</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Cash</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Payin</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Uncleared Cash</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">TOTAL</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Available Margin</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Margin Used</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Available Check</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right">Collateral Total</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right bg-blue-50">99% Margin</th>
-                    <th className="border border-slate-300 px-4 py-2 text-right bg-green-50">1% Margin</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Entity</TableHead>
+                    <TableHead>Level</TableHead>
+                    <TableHead>Profile</TableHead>
+                    <TableHead className="text-right">Cash</TableHead>
+                    <TableHead className="text-right">Payin</TableHead>
+                    <TableHead className="text-right">Uncleared Cash</TableHead>
+                    <TableHead className="text-right">TOTAL</TableHead>
+                    <TableHead className="text-right">Available Margin</TableHead>
+                    <TableHead className="text-right">Margin Used</TableHead>
+                    <TableHead className="text-right">Available Check</TableHead>
+                    <TableHead className="text-right">Collateral Total</TableHead>
+                    <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
+                    <TableHead className="text-right bg-green-50">1% Margin</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {processedData.map((row, index) => (
-                    <tr key={index} className="hover:bg-slate-50">
-                      <td className="border border-slate-300 px-4 py-2 font-medium">{row.Entity}</td>
-                      <td className="border border-slate-300 px-4 py-2">{row.Level}</td>
-                      <td className="border border-slate-300 px-4 py-2">{row.Profile}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.Cash)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.Payin)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.UnclearedCash)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.TOTAL)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.MarginUsed)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.AvailableCheck)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono">{formatNumber(row.CollateralTotal)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</td>
-                      <td className="border border-slate-300 px-4 py-2 text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</td>
-                    </tr>
+                    <TableRow key={index} className="hover:bg-slate-50">
+                      <TableCell className="font-medium">{row.Entity}</TableCell>
+                      <TableCell>{row.Level}</TableCell>
+                      <TableCell>{row.Profile}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.Cash)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.Payin)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.UnclearedCash)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.TOTAL)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.MarginUsed)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.AvailableCheck)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>
@@ -352,7 +413,7 @@ const EveningIntersegment: React.FC = () => {
       {!kambalaFile || !codeFile ? (
         <Alert>
           <AlertDescription>
-            Both Kambala file and Evening Intersegment code file are required to proceed.
+            Both Kambala Excel file and Evening Intersegment code Excel file are required to proceed.
           </AlertDescription>
         </Alert>
       ) : null}
