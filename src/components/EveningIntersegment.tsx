@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -115,11 +114,7 @@ const EveningIntersegment: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Parse Kambala Excel file
-      const kambalaData = await parseExcel(kambalaFile);
-      console.log('Kambala data:', kambalaData);
-
-      // Parse code Excel file
+      // Parse code Excel file first to get the codes to filter by
       const codeData = await parseExcel(codeFile);
       console.log('Code data:', codeData);
       
@@ -136,9 +131,21 @@ const EveningIntersegment: React.FC = () => {
       setIntersegmentCodes(codes);
       console.log('Intersegment codes:', codes);
 
-      // Filter Kambala data based on codes
-      const filteredData = kambalaData.filter(row => codes.includes(row.Entity));
+      // Parse Kambala Excel file
+      const kambalaData = await parseExcel(kambalaFile);
+      console.log('Kambala data:', kambalaData);
+
+      // Filter Kambala data based on codes and skip rows where Level is "COM"
+      const filteredData = kambalaData.filter(row => {
+        const entity = String(row.Entity || '').trim();
+        const level = String(row.Level || '').trim().toLowerCase();
+        
+        // Skip if Level is "COM" or if Entity is not in intersegment codes
+        return level !== 'com' && codes.includes(entity);
+      });
       
+      console.log('Filtered data (excluding COM level):', filteredData);
+
       // Process and calculate margins
       const processedKambalaData: KambalaData[] = filteredData.map(row => {
         const parseValue = (value: any): number => {
@@ -177,7 +184,7 @@ const EveningIntersegment: React.FC = () => {
       
       toast({
         title: "Processing Complete",
-        description: `Processed ${processedKambalaData.length} records successfully`,
+        description: `Processed ${processedKambalaData.length} records successfully (COM level rows excluded)`,
       });
     } catch (error) {
       console.error('Error processing files:', error);
@@ -226,10 +233,10 @@ const EveningIntersegment: React.FC = () => {
     });
 
     const mcxContent = processedData.map(row => 
-      `${currentDate},CO,M50302,90221,,${row.Entity},C,${row.margin1},,,,,,,D`
+      `${currentDate},CO,8090,46365,,${row.Entity},C,${row.margin99},,,,,,,A`
     ).join('\n');
 
-    const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
+    const header = 'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENTS AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
     const fullContent = header + mcxContent;
 
     const blob = new Blob([fullContent], { type: 'text/plain' });
