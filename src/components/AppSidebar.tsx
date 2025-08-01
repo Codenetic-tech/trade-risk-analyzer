@@ -19,7 +19,8 @@ import {
   Settings,
   Shield,
   BarChart3,
-  Download
+  Download,
+  Clock
 } from 'lucide-react';
 
 const menuItems = [
@@ -37,6 +38,11 @@ const menuItems = [
     title: 'Risk Analysis',
     url: '/analysis',
     icon: BarChart3,
+  },
+  {
+    title: 'Evening Intersegment',
+    url: '/evening-intersegment',
+    icon: Clock,
   },
   {
     title: 'Reports',

@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
+import EveningIntersegment from './components/EveningIntersegment';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
@@ -52,6 +53,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/evening-intersegment" 
+          element={
+            <ProtectedRoute>
+              <EveningIntersegment />
             </ProtectedRoute>
           } 
         />
