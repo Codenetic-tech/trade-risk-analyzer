@@ -118,8 +118,8 @@ const EveningIntersegment: React.FC = () => {
       const codeData = await parseExcel(codeFile);
       console.log('Code data:', codeData);
       
-      // Extract codes from the code file (assuming codes are in the first column)
-      const codes = codeData
+      // Extract codes from the code file and remove duplicates
+      const rawCodes = codeData
         .map(row => {
           // Get the first non-empty value from the row
           const values = Object.values(row);
@@ -128,8 +128,11 @@ const EveningIntersegment: React.FC = () => {
         .filter(code => code && String(code).trim())
         .map(code => String(code).trim());
       
+      // Remove duplicates from intersegment codes
+      const codes = [...new Set(rawCodes)];
+      
       setIntersegmentCodes(codes);
-      console.log('Intersegment codes to filter by:', codes);
+      console.log(`Evening Intersegment codes (${codes.length} unique):`, codes);
 
       // Parse Kambala Excel file
       const kambalaData = await parseExcel(kambalaFile);
@@ -144,13 +147,27 @@ const EveningIntersegment: React.FC = () => {
       console.log('Kambala rows with blank level:', blankLevelData.length);
 
       // Step 2: From the blank level rows, only take codes that exist in intersegment codes
-      const filteredData = blankLevelData.filter(row => {
+      // Create a Map to ensure we only get one record per entity (in case of duplicates)
+      const entityMap = new Map<string, any>();
+      
+      blankLevelData.forEach(row => {
         const entity = String(row.Entity || '').trim();
-        return codes.includes(entity);
+        if (codes.includes(entity) && !entityMap.has(entity)) {
+          entityMap.set(entity, row);
+        }
       });
       
-      console.log('Final filtered data (blank level + intersegment codes only):', filteredData.length);
+      const filteredData = Array.from(entityMap.values());
+      
+      console.log(`Final filtered data: ${filteredData.length} unique records (should match ${codes.length} intersegment codes)`);
       console.log('Filtered entities:', filteredData.map(row => row.Entity));
+
+      // Verify we have all the codes from intersegment file
+      const foundEntities = filteredData.map(row => String(row.Entity).trim());
+      const missingCodes = codes.filter(code => !foundEntities.includes(code));
+      if (missingCodes.length > 0) {
+        console.warn('Missing codes from Kambala file:', missingCodes);
+      }
 
       // Process and calculate margins
       const processedKambalaData: KambalaData[] = filteredData.map(row => {
@@ -190,7 +207,7 @@ const EveningIntersegment: React.FC = () => {
       
       toast({
         title: "Processing Complete",
-        description: `Processed ${processedKambalaData.length} records from ${codes.length} intersegment codes (only blank level rows)`,
+        description: `Processed ${processedKambalaData.length} unique records from ${codes.length} intersegment codes`,
       });
     } catch (error) {
       console.error('Error processing files:', error);
