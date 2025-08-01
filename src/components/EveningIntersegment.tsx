@@ -129,22 +129,28 @@ const EveningIntersegment: React.FC = () => {
         .map(code => String(code).trim());
       
       setIntersegmentCodes(codes);
-      console.log('Intersegment codes:', codes);
+      console.log('Intersegment codes to filter by:', codes);
 
       // Parse Kambala Excel file
       const kambalaData = await parseExcel(kambalaFile);
-      console.log('Kambala data:', kambalaData);
+      console.log('Total Kambala data rows:', kambalaData.length);
 
-      // Filter Kambala data based on codes and skip rows where Level is "COM"
-      const filteredData = kambalaData.filter(row => {
-        const entity = String(row.Entity || '').trim();
-        const level = String(row.Level || '').trim().toLowerCase();
-        
-        // Skip if Level is "COM" or if Entity is not in intersegment codes
-        return level !== 'com' && codes.includes(entity);
+      // Step 1: Filter Kambala data to only include rows where Level is blank/empty
+      const blankLevelData = kambalaData.filter(row => {
+        const level = String(row.Level || '').trim();
+        return level === '' || level === null || level === undefined;
       });
       
-      console.log('Filtered data (excluding COM level):', filteredData);
+      console.log('Kambala rows with blank level:', blankLevelData.length);
+
+      // Step 2: From the blank level rows, only take codes that exist in intersegment codes
+      const filteredData = blankLevelData.filter(row => {
+        const entity = String(row.Entity || '').trim();
+        return codes.includes(entity);
+      });
+      
+      console.log('Final filtered data (blank level + intersegment codes only):', filteredData.length);
+      console.log('Filtered entities:', filteredData.map(row => row.Entity));
 
       // Process and calculate margins
       const processedKambalaData: KambalaData[] = filteredData.map(row => {
@@ -184,7 +190,7 @@ const EveningIntersegment: React.FC = () => {
       
       toast({
         title: "Processing Complete",
-        description: `Processed ${processedKambalaData.length} records successfully (COM level rows excluded)`,
+        description: `Processed ${processedKambalaData.length} records from ${codes.length} intersegment codes (only blank level rows)`,
       });
     } catch (error) {
       console.error('Error processing files:', error);
