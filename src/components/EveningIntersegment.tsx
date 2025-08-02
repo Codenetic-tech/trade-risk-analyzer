@@ -28,6 +28,7 @@ interface KambalaData {
   CollateralTotal: number;
   margin99: number;
   margin1: number;
+  nseAmount: number;
 }
 
 const EveningIntersegment: React.FC = () => {
@@ -182,24 +183,38 @@ const EveningIntersegment: React.FC = () => {
           return 0;
         };
 
+        const cash = parseValue(row.Cash);
+        const payin = parseValue(row.Payin);
+        const marginUsed = parseValue(row.MarginUsed);
+        const collateralTotal = parseValue(row['Collateral(Total)']);
         const availableMargin = parseValue(row['Available Margin']);
+        
         const margin99 = Math.round(availableMargin * 0.99);
         const margin1 = Math.round(availableMargin * 0.01);
+
+        // New NSE calculation logic: if cash+payin < margin used, use (collateral Total - margin used) * (-1)
+        let nseAmount;
+        if ((cash + payin) < marginUsed) {
+          nseAmount = (collateralTotal - marginUsed) * -1;
+        } else {
+          nseAmount = margin1; // Use original 1% margin calculation
+        }
 
         return {
           Entity: String(row.Entity || ''),
           Level: String(row.Level || ''),
           Profile: String(row.Profile || ''),
-          Cash: parseValue(row.Cash),
-          Payin: parseValue(row.Payin),
+          Cash: cash,
+          Payin: payin,
           UnclearedCash: parseValue(row.UnclearedCash),
           TOTAL: parseValue(row.TOTAL),
           AvailableMargin: availableMargin,
-          MarginUsed: parseValue(row.MarginUsed),
+          MarginUsed: marginUsed,
           AvailableCheck: parseValue(row['Available check']),
-          CollateralTotal: parseValue(row['Collateral(Total)']),
+          CollateralTotal: collateralTotal,
           margin99,
-          margin1
+          margin1,
+          nseAmount
         };
       });
 
@@ -231,7 +246,7 @@ const EveningIntersegment: React.FC = () => {
     });
 
     const nseContent = processedData.map(row => 
-      `${currentDate},FO,M50302,90221,,${row.Entity},C,${row.margin1},,,,,,,D`
+      `${currentDate},FO,M50302,90221,,${row.Entity},C,${row.nseAmount},,,,,,,D`
     ).join('\n');
 
     const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
@@ -267,6 +282,43 @@ const EveningIntersegment: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = 'mcx_globe_file.txt';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadKambalaNSEFile = () => {
+    if (processedData.length === 0) return;
+
+    const nseContent = processedData.map(row => {
+      const negativeMargin99 = -row.margin99;
+      return `${row.Entity}|||||||||||||||||no||||||||${negativeMargin99}`;
+    }).join('\n');
+
+    const fullContent = 'RMS Limits\n' + nseContent;
+
+    const blob = new Blob([fullContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'kambala_nse_output.txt';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadKambalaMCXFile = () => {
+    if (processedData.length === 0) return;
+
+    const mcxContent = processedData.map(row => 
+      `${row.Entity}||COM|||||||||||||||no||||||||${row.margin99}`
+    ).join('\n');
+
+    const fullContent = 'RMS Limits\n' + mcxContent;
+
+    const blob = new Blob([fullContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'kambala_mcx_output.txt';
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -383,14 +435,22 @@ const EveningIntersegment: React.FC = () => {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Processed Data ({processedData.length} records)</CardTitle>
-              <div className="space-x-2">
+              <div className="space-x-2 flex flex-wrap gap-2">
                 <Button onClick={downloadNSEGlobeFile} className="bg-green-600 hover:bg-green-700">
                   <Download className="h-4 w-4 mr-2" />
-                  Download NSE Globe File
+                  NSE Globe File
                 </Button>
                 <Button onClick={downloadMCXGlobeFile} className="bg-purple-600 hover:bg-purple-700">
                   <Download className="h-4 w-4 mr-2" />
-                  Download MCX Globe File
+                  MCX Globe File
+                </Button>
+                <Button onClick={downloadKambalaNSEFile} className="bg-blue-600 hover:bg-blue-700">
+                  <Download className="h-4 w-4 mr-2" />
+                  Kambala NSE Output
+                </Button>
+                <Button onClick={downloadKambalaMCXFile} className="bg-orange-600 hover:bg-orange-700">
+                  <Download className="h-4 w-4 mr-2" />
+                  Kambala MCX Output
                 </Button>
               </div>
             </div>
@@ -413,6 +473,7 @@ const EveningIntersegment: React.FC = () => {
                     <TableHead className="text-right">Collateral Total</TableHead>
                     <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
                     <TableHead className="text-right bg-green-50">1% Margin</TableHead>
+                    <TableHead className="text-right bg-yellow-50">NSE Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -431,6 +492,7 @@ const EveningIntersegment: React.FC = () => {
                       <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-yellow-600 bg-yellow-50">{formatNumber(row.nseAmount)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
