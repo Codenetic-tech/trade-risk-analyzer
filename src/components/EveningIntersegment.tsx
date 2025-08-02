@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,8 @@ interface KambalaData {
   margin99: number;
   margin1: number;
   nseAmount: number;
+  kambalaNseAmount: number;
+  kambalaMcxAmount: number;
 }
 
 const EveningIntersegment: React.FC = () => {
@@ -185,6 +188,7 @@ const EveningIntersegment: React.FC = () => {
 
         const cash = parseValue(row.Cash);
         const payin = parseValue(row.Payin);
+        const unclearedCash = parseValue(row.UnclearedCash);
         const marginUsed = parseValue(row.MarginUsed);
         const collateralTotal = parseValue(row['Collateral(Total)']);
         const availableMargin = parseValue(row['Available Margin']);
@@ -200,13 +204,29 @@ const EveningIntersegment: React.FC = () => {
           nseAmount = margin1; // Use original 1% margin calculation
         }
 
+        // New Kambala calculations based on uncleared cash
+        let kambalaNseAmount, kambalaMcxAmount;
+        
+        if (unclearedCash !== 0) {
+          // If uncleared cash is not 0, use new calculation
+          const newMarginUsed = marginUsed + (marginUsed * 0.01); // margin used + 1% of margin used
+          const calculatedAmount = newMarginUsed - (cash + payin);
+          
+          kambalaNseAmount = -calculatedAmount; // Negative for NSE
+          kambalaMcxAmount = calculatedAmount;   // Positive for MCX
+        } else {
+          // If uncleared cash is 0, use original calculation
+          kambalaNseAmount = -margin99; // Negative 99% margin for NSE
+          kambalaMcxAmount = margin99;  // Positive 99% margin for MCX
+        }
+
         return {
           Entity: String(row.Entity || ''),
           Level: String(row.Level || ''),
           Profile: String(row.Profile || ''),
           Cash: cash,
           Payin: payin,
-          UnclearedCash: parseValue(row.UnclearedCash),
+          UnclearedCash: unclearedCash,
           TOTAL: parseValue(row.TOTAL),
           AvailableMargin: availableMargin,
           MarginUsed: marginUsed,
@@ -214,7 +234,9 @@ const EveningIntersegment: React.FC = () => {
           CollateralTotal: collateralTotal,
           margin99,
           margin1,
-          nseAmount
+          nseAmount,
+          kambalaNseAmount,
+          kambalaMcxAmount
         };
       });
 
@@ -290,8 +312,7 @@ const EveningIntersegment: React.FC = () => {
     if (processedData.length === 0) return;
 
     const nseContent = processedData.map(row => {
-      const negativeMargin99 = -row.margin99;
-      return `${row.Entity}|||||||||||||||||no||||||||${negativeMargin99}`;
+      return `${row.Entity}|||||||||||||||||no||||||||${row.kambalaNseAmount}`;
     }).join('\n');
 
     const fullContent = 'RMS Limits\n' + nseContent;
@@ -309,7 +330,7 @@ const EveningIntersegment: React.FC = () => {
     if (processedData.length === 0) return;
 
     const mcxContent = processedData.map(row => 
-      `${row.Entity}||COM|||||||||||||||no||||||||${row.margin99}`
+      `${row.Entity}||COM|||||||||||||||no||||||||${row.kambalaMcxAmount}`
     ).join('\n');
 
     const fullContent = 'RMS Limits\n' + mcxContent;
@@ -474,6 +495,8 @@ const EveningIntersegment: React.FC = () => {
                     <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
                     <TableHead className="text-right bg-green-50">1% Margin</TableHead>
                     <TableHead className="text-right bg-yellow-50">NSE Amount</TableHead>
+                    <TableHead className="text-right bg-red-50">Kambala NSE</TableHead>
+                    <TableHead className="text-right bg-purple-50">Kambala MCX</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -493,6 +516,8 @@ const EveningIntersegment: React.FC = () => {
                       <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold text-yellow-600 bg-yellow-50">{formatNumber(row.nseAmount)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-red-600 bg-red-50">{formatNumber(row.kambalaNseAmount)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-purple-600 bg-purple-50">{formatNumber(row.kambalaMcxAmount)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
