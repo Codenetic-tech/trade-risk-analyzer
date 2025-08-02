@@ -15,6 +15,7 @@ import {
 import * as XLSX from 'xlsx';
 import AdvancedFilters from './AdvancedFilters';
 import DataVisualization from './DataVisualization';
+import { FileUploadModal } from './FileUploadModal';
 
 interface KambalaData {
   Entity: string;
@@ -35,14 +36,13 @@ interface KambalaData {
 }
 
 const EveningIntersegment: React.FC = () => {
-  const [kambalaFile, setKambalaFile] = useState<File | null>(null);
-  const [codeFile, setCodeFile] = useState<File | null>(null);
   const [processedData, setProcessedData] = useState<KambalaData[]>([]);
   const [intersegmentCodes, setIntersegmentCodes] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
   const [showVisualization, setShowVisualization] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Advanced filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,29 +52,6 @@ const EveningIntersegment: React.FC = () => {
     cashRange: { min: '', max: '' },
     marginRange: { min: '', max: '' },
   });
-
-  const handleFileSelect = (type: 'kambala' | 'code', file: File) => {
-    if (type === 'kambala') {
-      setKambalaFile(file);
-    } else {
-      setCodeFile(file);
-    }
-  };
-
-  const resetForNewUpload = () => {
-    setKambalaFile(null);
-    setCodeFile(null);
-    setProcessedData([]);
-    setIntersegmentCodes([]);
-    setSearchQuery('');
-    setFilters({
-      entity: '',
-      profile: '',
-      cashRange: { min: '', max: '' },
-      marginRange: { min: '', max: '' },
-    });
-    setCurrentPage(1);
-  };
 
   const parseExcel = async (file: File): Promise<any[]> => {
     return new Promise((resolve, reject) => {
@@ -132,7 +109,7 @@ const EveningIntersegment: React.FC = () => {
     });
   };
 
-  const processFiles = async () => {
+  const processFiles = async (kambalaFile: File | null, codeFile: File | null) => {
     if (!kambalaFile || !codeFile) {
       toast({
         title: "Missing Files",
@@ -511,32 +488,41 @@ const EveningIntersegment: React.FC = () => {
             </p>
           </div>
           <div className="flex space-x-3">
+            <Button 
+              onClick={() => setShowUploadModal(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isProcessing}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {isProcessing ? 'Processing...' : 'Upload Files'}
+            </Button>
             {processedData.length > 0 && (
-              <>
-                <Button 
-                  onClick={() => setShowVisualization(!showVisualization)} 
-                  variant="outline" 
-                  className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
-                >
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  {showVisualization ? 'Hide Charts' : 'Show Charts'}
-                </Button>
-                <Button onClick={resetForNewUpload} variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Upload New Files
-                </Button>
-              </>
+              <Button 
+                onClick={() => setShowVisualization(!showVisualization)} 
+                variant="outline" 
+                className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                {showVisualization ? 'Hide Charts' : 'Show Charts'}
+              </Button>
             )}
           </div>
         </div>
       </div>
+
+      {/* File Upload Modal */}
+      <FileUploadModal
+        open={showUploadModal}
+        onOpenChange={setShowUploadModal}
+        onFilesSelected={processFiles}
+      />
 
       {/* Data Visualization */}
       {processedData.length > 0 && showVisualization && (
         <DataVisualization data={processedData} />
       )}
 
-      {/* Permanent Summary Cards - Always visible if there's processed data */}
+      {/* Summary Cards - Always visible if there's processed data */}
       {processedData.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
           <Card className="shadow-sm border-blue-100">
@@ -574,101 +560,8 @@ const EveningIntersegment: React.FC = () => {
         </div>
       )}
 
-      {/* File Upload Section - Only show if no data processed */}
-      {processedData.length === 0 && (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                  <span>Kambala File</span>
-                </CardTitle>
-                <CardDescription>Upload the Kambala Excel file (.xlsx)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {kambalaFile ? (
-                  <div className="text-center py-4">
-                    <p className="text-sm font-medium">{kambalaFile.name}</p>
-                    <p className="text-xs text-green-600">File uploaded successfully</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <label htmlFor="kambala-upload" className="cursor-pointer">
-                      <span className="text-blue-600 hover:text-blue-700 font-medium">
-                        Click to upload
-                      </span>
-                    </label>
-                    <input
-                      id="kambala-upload"
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileSelect('kambala', file);
-                      }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                  <span>Evening Intersegment Code File</span>
-                </CardTitle>
-                <CardDescription>Upload the code Excel file (.xlsx)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {codeFile ? (
-                  <div className="text-center py-4">
-                    <p className="text-sm font-medium">{codeFile.name}</p>
-                    <p className="text-xs text-green-600">File uploaded successfully</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <label htmlFor="code-upload" className="cursor-pointer">
-                      <span className="text-blue-600 hover:text-blue-700 font-medium">
-                        Click to upload
-                      </span>
-                    </label>
-                    <input
-                      id="code-upload"
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileSelect('code', file);
-                      }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Process Button */}
-          <div className="flex justify-center">
-            <Button
-              onClick={processFiles}
-              disabled={!kambalaFile || !codeFile || isProcessing}
-              className="bg-blue-600 hover:bg-blue-700 px-8 py-2"
-            >
-              <Calculator className="h-4 w-4 mr-2" />
-              {isProcessing ? 'Processing...' : 'Process Files'}
-            </Button>
-          </div>
-        </>
-      )}
-
-      {/* Results Section */}
-      {processedData.length > 0 && (
+      {/* Results Section - Always shown */}
+      {processedData.length > 0 ? (
         <>
           {/* One-Click Download All Button */}
           <div className="flex justify-center">
@@ -795,15 +688,20 @@ const EveningIntersegment: React.FC = () => {
             </CardContent>
           </Card>
         </>
+      ) : (
+        <div className="text-center py-12">
+          <Upload className="mx-auto h-16 w-16 text-slate-400 mb-4" />
+          <h3 className="text-lg font-medium text-slate-800 mb-2">No Data Processed Yet</h3>
+          <p className="text-slate-600 mb-6">Upload your Kambala and Evening Intersegment code files to get started</p>
+          <Button 
+            onClick={() => setShowUploadModal(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Files
+          </Button>
+        </div>
       )}
-
-      {!kambalaFile || !codeFile ? (
-        <Alert>
-          <AlertDescription>
-            Both Kambala Excel file and Evening Intersegment code Excel file are required to proceed.
-          </AlertDescription>
-        </Alert>
-      ) : null}
     </div>
   );
 };

@@ -22,7 +22,6 @@ import {
   Download,
   Clock,
   ChevronRight,
-  Dot
 } from 'lucide-react';
 
 const menuItems = [
@@ -87,12 +86,12 @@ export function AppSidebar() {
 
   return (
     <Sidebar 
-      className={`transition-all duration-300 ${isCollapsed ? "w-16" : "w-64"} border-r-0 shadow-xl bg-gradient-to-b from-slate-50 to-white`} 
+      className={`transition-all duration-300 ${isCollapsed ? "w-16" : "w-64"} border-r border-slate-200 shadow-lg bg-white`} 
       collapsible="icon"
     >
       <SidebarContent className="bg-transparent">
-        {/* Modern Logo Section */}
-        <div className={`transition-all duration-300 ${isCollapsed ? 'p-3' : 'p-6'} border-b border-slate-200/60`}>
+        {/* Logo Section */}
+        <div className={`transition-all duration-300 ${isCollapsed ? 'p-3' : 'p-6'} border-b border-slate-200`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="relative">
               <div className={`bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-xl shadow-lg transition-all duration-300 ${isCollapsed ? 'p-2' : 'p-2.5'}`}>
@@ -110,9 +109,9 @@ export function AppSidebar() {
         </div>
 
         <SidebarGroup className={`transition-all duration-300 ${isCollapsed ? 'px-2 py-3' : 'px-4 py-4'}`}>
+          {/* Only show subheading when expanded */}
           {!isCollapsed && (
-            <SidebarGroupLabel className="px-2 py-2 text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center">
-              <Dot className="h-4 w-4 mr-1 text-blue-500" />
+            <SidebarGroupLabel className="px-2 py-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
               Navigation
             </SidebarGroupLabel>
           )}
@@ -122,17 +121,24 @@ export function AppSidebar() {
                 const isItemActive = isActive(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton 
+                      asChild
+                      tooltip={isCollapsed ? item.title : undefined}
+                    >
                       <NavLink 
                         to={item.url} 
                         className={`group relative transition-all duration-200 ${
                           isItemActive 
-                            ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 font-semibold border-l-4 border-blue-600 shadow-sm" 
-                            : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900 border-l-4 border-transparent hover:border-slate-300"
+                            ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 font-semibold border-r-4 border-blue-600 shadow-sm" 
+                            : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900"
                         }`}
                       >
                         <div className={`flex items-center transition-all duration-200 ${isCollapsed ? 'justify-center py-3 px-2' : 'space-x-3 py-3 px-3'} rounded-lg`}>
-                          <item.icon className={`flex-shrink-0 transition-all duration-200 ${isCollapsed ? 'h-5 w-5' : 'h-5 w-5'} ${isItemActive ? 'text-blue-600' : item.color}`} />
+                          <item.icon 
+                            className={`flex-shrink-0 transition-all duration-200 h-5 w-5 ${
+                              isItemActive ? 'text-blue-600' : item.color
+                            }`} 
+                          />
                           {!isCollapsed && (
                             <div className="flex-1 min-w-0 transition-all duration-300">
                               <div className="flex items-center justify-between">
@@ -143,10 +149,6 @@ export function AppSidebar() {
                             </div>
                           )}
                         </div>
-                        {/* Active indicator for collapsed state */}
-                        {isCollapsed && isItemActive && (
-                          <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-l-full"></div>
-                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -156,8 +158,8 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Modern Status Footer */}
-        <div className={`mt-auto transition-all duration-300 ${isCollapsed ? 'p-2' : 'p-4'} border-t border-slate-200/60`}>
+        {/* Status Footer */}
+        <div className={`mt-auto transition-all duration-300 ${isCollapsed ? 'p-2' : 'p-4'} border-t border-slate-200`}>
           {!isCollapsed ? (
             <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200 shadow-sm">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-sm"></div>
