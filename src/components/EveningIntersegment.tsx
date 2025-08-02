@@ -1,10 +1,17 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
-import { Upload, Download, FileSpreadsheet, Calculator } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, Calculator, Search, Filter } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -40,6 +47,10 @@ const EveningIntersegment: React.FC = () => {
   const [processedData, setProcessedData] = useState<KambalaData[]>([]);
   const [intersegmentCodes, setIntersegmentCodes] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   const handleFileSelect = (type: 'kambala' | 'code', file: File) => {
     if (type === 'kambala') {
@@ -344,12 +355,76 @@ const EveningIntersegment: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const exportProcessedData = () => {
+    if (processedData.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No processed data to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const exportData = processedData.map(row => ({
+      Entity: row.Entity,
+      Level: row.Level,
+      Profile: row.Profile,
+      Cash: row.Cash,
+      Payin: row.Payin,
+      'Uncleared Cash': row.UnclearedCash,
+      TOTAL: row.TOTAL,
+      'Available Margin': row.AvailableMargin,
+      'Margin Used': row.MarginUsed,
+      'Available Check': row.AvailableCheck,
+      'Collateral Total': row.CollateralTotal,
+      '99% Margin': row.margin99,
+      '1% Margin': row.margin1,
+      'NSE Amount': row.nseAmount,
+      'Kambala NSE': row.kambalaNseAmount,
+      'Kambala MCX': row.kambalaMcxAmount,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Evening Intersegment Data');
+    XLSX.writeFile(wb, 'evening_intersegment_processed_data.xlsx');
+
+    toast({
+      title: "Export Complete",
+      description: "Processed data exported successfully",
+    });
+  };
+
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(num);
   };
+
+  const summaryTotals = useMemo(() => {
+    return {
+      total99Margin: processedData.reduce((sum, row) => sum + row.margin99, 0),
+      total1Margin: processedData.reduce((sum, row) => sum + row.margin1, 0),
+      totalCollateral: processedData.reduce((sum, row) => sum + row.CollateralTotal, 0),
+      totalAvailableMargin: processedData.reduce((sum, row) => sum + row.AvailableMargin, 0),
+    };
+  }, [processedData]);
+
+  const filteredData = useMemo(() => {
+    return processedData.filter(item => {
+      const matchesSearch = item.Entity.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           item.Profile.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [processedData, searchQuery]);
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredData, currentPage]);
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
   return (
     <div className="space-y-8">
@@ -450,6 +525,44 @@ const EveningIntersegment: React.FC = () => {
         </Button>
       </div>
 
+      {/* Summary Cards */}
+      {processedData.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-blue-600">Total 99% Margin</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-700">{formatNumber(summaryTotals.total99Margin)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-green-600">Total 1% Margin</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-700">{formatNumber(summaryTotals.total1Margin)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-purple-600">Total Collateral</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-700">{formatNumber(summaryTotals.totalCollateral)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-orange-600">Total Available Margin</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-700">{formatNumber(summaryTotals.totalAvailableMargin)}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Results Table */}
       {processedData.length > 0 && (
         <Card>
@@ -473,6 +586,28 @@ const EveningIntersegment: React.FC = () => {
                   <Download className="h-4 w-4 mr-2" />
                   Kambala MCX Output
                 </Button>
+                <Button onClick={exportProcessedData} className="bg-slate-600 hover:bg-slate-700">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Data
+                </Button>
+              </div>
+            </div>
+            
+            {/* Advanced Filters */}
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mt-4">
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Search Entity or Profile..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1); // Reset to first page on search
+                    }}
+                    className="pl-10 w-full sm:w-64"
+                  />
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -500,7 +635,7 @@ const EveningIntersegment: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {processedData.map((row, index) => (
+                  {paginatedData.map((row, index) => (
                     <TableRow key={index} className="hover:bg-slate-50">
                       <TableCell className="font-medium">{row.Entity}</TableCell>
                       <TableCell>{row.Level}</TableCell>
@@ -523,6 +658,36 @@ const EveningIntersegment: React.FC = () => {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-slate-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="flex items-center px-3 text-sm text-slate-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
