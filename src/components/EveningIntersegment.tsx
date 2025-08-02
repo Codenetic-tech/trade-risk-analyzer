@@ -3,15 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
-import { Upload, Download, FileSpreadsheet, Calculator, Search, Filter } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Upload, Download, FileSpreadsheet, Calculator, RefreshCw, Package } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -21,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
+import AdvancedFilters from './AdvancedFilters';
 
 interface KambalaData {
   Entity: string;
@@ -36,7 +29,6 @@ interface KambalaData {
   CollateralTotal: number;
   margin99: number;
   margin1: number;
-  nseAmount: number;
   kambalaNseAmount: number;
   kambalaMcxAmount: number;
 }
@@ -47,10 +39,17 @@ const EveningIntersegment: React.FC = () => {
   const [processedData, setProcessedData] = useState<KambalaData[]>([]);
   const [intersegmentCodes, setIntersegmentCodes] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+
+  // Advanced filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState({
+    entity: '',
+    profile: '',
+    cashRange: { min: '', max: '' },
+    marginRange: { min: '', max: '' },
+  });
 
   const handleFileSelect = (type: 'kambala' | 'code', file: File) => {
     if (type === 'kambala') {
@@ -58,6 +57,21 @@ const EveningIntersegment: React.FC = () => {
     } else {
       setCodeFile(file);
     }
+  };
+
+  const resetForNewUpload = () => {
+    setKambalaFile(null);
+    setCodeFile(null);
+    setProcessedData([]);
+    setIntersegmentCodes([]);
+    setSearchQuery('');
+    setFilters({
+      entity: '',
+      profile: '',
+      cashRange: { min: '', max: '' },
+      marginRange: { min: '', max: '' },
+    });
+    setCurrentPage(1);
   };
 
   const parseExcel = async (file: File): Promise<any[]> => {
@@ -207,14 +221,6 @@ const EveningIntersegment: React.FC = () => {
         const margin99 = Math.round(availableMargin * 0.99);
         const margin1 = Math.round(availableMargin * 0.01);
 
-        // New NSE calculation logic: if cash+payin < margin used, use (collateral Total - margin used) * (-1)
-        let nseAmount;
-        if ((cash + payin) < marginUsed) {
-          nseAmount = (collateralTotal - marginUsed) * -1;
-        } else {
-          nseAmount = margin1; // Use original 1% margin calculation
-        }
-
         // New Kambala calculations based on uncleared cash
         let kambalaNseAmount, kambalaMcxAmount;
         
@@ -245,7 +251,6 @@ const EveningIntersegment: React.FC = () => {
           CollateralTotal: collateralTotal,
           margin99,
           margin1,
-          nseAmount,
           kambalaNseAmount,
           kambalaMcxAmount
         };
@@ -278,9 +283,21 @@ const EveningIntersegment: React.FC = () => {
       year: 'numeric'
     });
 
-    const nseContent = processedData.map(row => 
-      `${currentDate},FO,M50302,90221,,${row.Entity},C,${row.nseAmount},,,,,,,D`
-    ).join('\n');
+    const nseContent = processedData.map(row => {
+      const cash = row.Cash;
+      const payin = row.Payin;
+      const marginUsed = row.MarginUsed;
+      const collateralTotal = row.CollateralTotal;
+      
+      let nseAmount;
+      if ((cash + payin) < marginUsed) {
+        nseAmount = (collateralTotal - marginUsed) * -1;
+      } else {
+        nseAmount = row.margin1;
+      }
+      
+      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${nseAmount},,,,,,,D`;
+    }).join('\n');
 
     const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
     const fullContent = header + nseContent;
@@ -355,6 +372,28 @@ const EveningIntersegment: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const downloadAllFiles = () => {
+    if (processedData.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No processed data to download",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    downloadNSEGlobeFile();
+    setTimeout(() => downloadMCXGlobeFile(), 500);
+    setTimeout(() => downloadKambalaNSEFile(), 1000);
+    setTimeout(() => downloadKambalaMCXFile(), 1500);
+    setTimeout(() => exportProcessedData(), 2000);
+
+    toast({
+      title: "Download Started",
+      description: "All files are being downloaded. Please check your downloads folder.",
+    });
+  };
+
   const exportProcessedData = () => {
     if (processedData.length === 0) {
       toast({
@@ -379,7 +418,6 @@ const EveningIntersegment: React.FC = () => {
       'Collateral Total': row.CollateralTotal,
       '99% Margin': row.margin99,
       '1% Margin': row.margin1,
-      'NSE Amount': row.nseAmount,
       'Kambala NSE': row.kambalaNseAmount,
       'Kambala MCX': row.kambalaMcxAmount,
     }));
@@ -413,11 +451,23 @@ const EveningIntersegment: React.FC = () => {
 
   const filteredData = useMemo(() => {
     return processedData.filter(item => {
+      // Search filter
       const matchesSearch = item.Entity.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            item.Profile.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
+
+      // Advanced filters
+      const matchesEntity = !filters.entity || item.Entity.toLowerCase().includes(filters.entity.toLowerCase());
+      const matchesProfile = !filters.profile || item.Profile.toLowerCase().includes(filters.profile.toLowerCase());
+      
+      const matchesCashRange = (!filters.cashRange.min || item.Cash >= parseFloat(filters.cashRange.min)) &&
+                              (!filters.cashRange.max || item.Cash <= parseFloat(filters.cashRange.max));
+      
+      const matchesMarginRange = (!filters.marginRange.min || item.AvailableMargin >= parseFloat(filters.marginRange.min)) &&
+                                (!filters.marginRange.max || item.AvailableMargin <= parseFloat(filters.marginRange.max));
+
+      return matchesSearch && matchesEntity && matchesProfile && matchesCashRange && matchesMarginRange;
     });
-  }, [processedData, searchQuery]);
+  }, [processedData, searchQuery, filters]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -426,109 +476,50 @@ const EveningIntersegment: React.FC = () => {
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filters.entity) count++;
+    if (filters.profile) count++;
+    if (filters.cashRange.min || filters.cashRange.max) count++;
+    if (filters.marginRange.min || filters.marginRange.max) count++;
+    return count;
+  }, [filters]);
+
+  const clearFilters = () => {
+    setFilters({
+      entity: '',
+      profile: '',
+      cashRange: { min: '', max: '' },
+      marginRange: { min: '', max: '' },
+    });
+    setSearchQuery('');
+    setCurrentPage(1);
+  };
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-bold text-slate-800">Evening Intersegment</h1>
-        <p className="text-slate-600 mt-2">
-          Process Kambala Excel file with Evening Intersegment codes and generate globe files
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Evening Intersegment</h1>
+            <p className="text-slate-600 mt-2">
+              Process Kambala Excel file with Evening Intersegment codes and generate globe files
+            </p>
+          </div>
+          {processedData.length > 0 && (
+            <Button onClick={resetForNewUpload} variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Upload New Files
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* File Upload Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-              <span>Kambala File</span>
-            </CardTitle>
-            <CardDescription>Upload the Kambala Excel file (.xlsx)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {kambalaFile ? (
-              <div className="text-center py-4">
-                <p className="text-sm font-medium">{kambalaFile.name}</p>
-                <p className="text-xs text-green-600">File uploaded successfully</p>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                <label htmlFor="kambala-upload" className="cursor-pointer">
-                  <span className="text-blue-600 hover:text-blue-700 font-medium">
-                    Click to upload
-                  </span>
-                </label>
-                <input
-                  id="kambala-upload"
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileSelect('kambala', file);
-                  }}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-              <span>Evening Intersegment Code File</span>
-            </CardTitle>
-            <CardDescription>Upload the code Excel file (.xlsx)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {codeFile ? (
-              <div className="text-center py-4">
-                <p className="text-sm font-medium">{codeFile.name}</p>
-                <p className="text-xs text-green-600">File uploaded successfully</p>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                <label htmlFor="code-upload" className="cursor-pointer">
-                  <span className="text-blue-600 hover:text-blue-700 font-medium">
-                    Click to upload
-                  </span>
-                </label>
-                <input
-                  id="code-upload"
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileSelect('code', file);
-                  }}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Process Button */}
-      <div className="flex justify-center">
-        <Button
-          onClick={processFiles}
-          disabled={!kambalaFile || !codeFile || isProcessing}
-          className="bg-blue-600 hover:bg-blue-700 px-8 py-2"
-        >
-          <Calculator className="h-4 w-4 mr-2" />
-          {isProcessing ? 'Processing...' : 'Process Files'}
-        </Button>
-      </div>
-
-      {/* Summary Cards */}
+      {/* Permanent Summary Cards - Always visible if there's processed data */}
       {processedData.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+          <Card className="shadow-sm border-blue-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-blue-600">Total 99% Margin</CardTitle>
             </CardHeader>
@@ -536,7 +527,7 @@ const EveningIntersegment: React.FC = () => {
               <div className="text-2xl font-bold text-blue-700">{formatNumber(summaryTotals.total99Margin)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm border-green-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-green-600">Total 1% Margin</CardTitle>
             </CardHeader>
@@ -544,7 +535,7 @@ const EveningIntersegment: React.FC = () => {
               <div className="text-2xl font-bold text-green-700">{formatNumber(summaryTotals.total1Margin)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm border-purple-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-purple-600">Total Collateral</CardTitle>
             </CardHeader>
@@ -552,7 +543,7 @@ const EveningIntersegment: React.FC = () => {
               <div className="text-2xl font-bold text-purple-700">{formatNumber(summaryTotals.totalCollateral)}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm border-orange-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-orange-600">Total Available Margin</CardTitle>
             </CardHeader>
@@ -563,133 +554,227 @@ const EveningIntersegment: React.FC = () => {
         </div>
       )}
 
-      {/* Results Table */}
-      {processedData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>Processed Data ({processedData.length} records)</CardTitle>
-              <div className="space-x-2 flex flex-wrap gap-2">
-                <Button onClick={downloadNSEGlobeFile} className="bg-green-600 hover:bg-green-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  NSE Globe File
-                </Button>
-                <Button onClick={downloadMCXGlobeFile} className="bg-purple-600 hover:bg-purple-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  MCX Globe File
-                </Button>
-                <Button onClick={downloadKambalaNSEFile} className="bg-blue-600 hover:bg-blue-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  Kambala NSE Output
-                </Button>
-                <Button onClick={downloadKambalaMCXFile} className="bg-orange-600 hover:bg-orange-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  Kambala MCX Output
-                </Button>
-                <Button onClick={exportProcessedData} className="bg-slate-600 hover:bg-slate-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Data
-                </Button>
-              </div>
-            </div>
-            
-            {/* Advanced Filters */}
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mt-4">
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Search Entity or Profile..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1); // Reset to first page on search
-                    }}
-                    className="pl-10 w-full sm:w-64"
-                  />
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Entity</TableHead>
-                    <TableHead>Level</TableHead>
-                    <TableHead>Profile</TableHead>
-                    <TableHead className="text-right">Cash</TableHead>
-                    <TableHead className="text-right">Payin</TableHead>
-                    <TableHead className="text-right">Uncleared Cash</TableHead>
-                    <TableHead className="text-right">TOTAL</TableHead>
-                    <TableHead className="text-right">Available Margin</TableHead>
-                    <TableHead className="text-right">Margin Used</TableHead>
-                    <TableHead className="text-right">Available Check</TableHead>
-                    <TableHead className="text-right">Collateral Total</TableHead>
-                    <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
-                    <TableHead className="text-right bg-green-50">1% Margin</TableHead>
-                    <TableHead className="text-right bg-yellow-50">NSE Amount</TableHead>
-                    <TableHead className="text-right bg-red-50">Kambala NSE</TableHead>
-                    <TableHead className="text-right bg-purple-50">Kambala MCX</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedData.map((row, index) => (
-                    <TableRow key={index} className="hover:bg-slate-50">
-                      <TableCell className="font-medium">{row.Entity}</TableCell>
-                      <TableCell>{row.Level}</TableCell>
-                      <TableCell>{row.Profile}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.Cash)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.Payin)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.UnclearedCash)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.TOTAL)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.MarginUsed)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.AvailableCheck)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-yellow-600 bg-yellow-50">{formatNumber(row.nseAmount)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-red-600 bg-red-50">{formatNumber(row.kambalaNseAmount)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-purple-600 bg-purple-50">{formatNumber(row.kambalaMcxAmount)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+      {/* File Upload Section - Only show if no data processed */}
+      {processedData.length === 0 && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+                  <span>Kambala File</span>
+                </CardTitle>
+                <CardDescription>Upload the Kambala Excel file (.xlsx)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {kambalaFile ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm font-medium">{kambalaFile.name}</p>
+                    <p className="text-xs text-green-600">File uploaded successfully</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                    <label htmlFor="kambala-upload" className="cursor-pointer">
+                      <span className="text-blue-600 hover:text-blue-700 font-medium">
+                        Click to upload
+                      </span>
+                    </label>
+                    <input
+                      id="kambala-upload"
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileSelect('kambala', file);
+                      }}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-slate-600">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
+            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <FileSpreadsheet className="h-5 w-5 text-purple-600" />
+                  <span>Evening Intersegment Code File</span>
+                </CardTitle>
+                <CardDescription>Upload the code Excel file (.xlsx)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {codeFile ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm font-medium">{codeFile.name}</p>
+                    <p className="text-xs text-green-600">File uploaded successfully</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                    <label htmlFor="code-upload" className="cursor-pointer">
+                      <span className="text-blue-600 hover:text-blue-700 font-medium">
+                        Click to upload
+                      </span>
+                    </label>
+                    <input
+                      id="code-upload"
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileSelect('code', file);
+                      }}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Process Button */}
+          <div className="flex justify-center">
+            <Button
+              onClick={processFiles}
+              disabled={!kambalaFile || !codeFile || isProcessing}
+              className="bg-blue-600 hover:bg-blue-700 px-8 py-2"
+            >
+              <Calculator className="h-4 w-4 mr-2" />
+              {isProcessing ? 'Processing...' : 'Process Files'}
+            </Button>
+          </div>
+        </>
+      )}
+
+      {/* Results Section */}
+      {processedData.length > 0 && (
+        <>
+          {/* One-Click Download All Button */}
+          <div className="flex justify-center">
+            <Button onClick={downloadAllFiles} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-8 py-3 text-white font-semibold shadow-lg">
+              <Package className="h-5 w-5 mr-2" />
+              Download All Files
+            </Button>
+          </div>
+
+          {/* Advanced Filters */}
+          <AdvancedFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            filters={filters}
+            onFiltersChange={setFilters}
+            onClearFilters={clearFilters}
+            activeFiltersCount={activeFiltersCount}
+          />
+
+          {/* Results Table */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Processed Data ({filteredData.length} of {processedData.length} records)</CardTitle>
+                <div className="space-x-2 flex flex-wrap gap-2">
+                  <Button onClick={downloadNSEGlobeFile} className="bg-green-600 hover:bg-green-700">
+                    <Download className="h-4 w-4 mr-2" />
+                    NSE Globe
                   </Button>
-                  <span className="flex items-center px-3 text-sm text-slate-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
+                  <Button onClick={downloadMCXGlobeFile} className="bg-purple-600 hover:bg-purple-700">
+                    <Download className="h-4 w-4 mr-2" />
+                    MCX Globe
+                  </Button>
+                  <Button onClick={downloadKambalaNSEFile} className="bg-blue-600 hover:bg-blue-700">
+                    <Download className="h-4 w-4 mr-2" />
+                    Kambala NSE
+                  </Button>
+                  <Button onClick={downloadKambalaMCXFile} className="bg-orange-600 hover:bg-orange-700">
+                    <Download className="h-4 w-4 mr-2" />
+                    Kambala MCX
+                  </Button>
+                  <Button onClick={exportProcessedData} className="bg-slate-600 hover:bg-slate-700">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Data
                   </Button>
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Level</TableHead>
+                      <TableHead>Profile</TableHead>
+                      <TableHead className="text-right">Cash</TableHead>
+                      <TableHead className="text-right">Payin</TableHead>
+                      <TableHead className="text-right">Uncleared Cash</TableHead>
+                      <TableHead className="text-right">TOTAL</TableHead>
+                      <TableHead className="text-right">Available Margin</TableHead>
+                      <TableHead className="text-right">Margin Used</TableHead>
+                      <TableHead className="text-right">Available Check</TableHead>
+                      <TableHead className="text-right">Collateral Total</TableHead>
+                      <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
+                      <TableHead className="text-right bg-green-50">1% Margin</TableHead>
+                      <TableHead className="text-right bg-red-50">Kambala NSE</TableHead>
+                      <TableHead className="text-right bg-purple-50">Kambala MCX</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedData.map((row, index) => (
+                      <TableRow key={index} className="hover:bg-slate-50">
+                        <TableCell className="font-medium">{row.Entity}</TableCell>
+                        <TableCell>{row.Level}</TableCell>
+                        <TableCell>{row.Profile}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.Cash)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.Payin)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.UnclearedCash)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.TOTAL)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.MarginUsed)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.AvailableCheck)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-red-600 bg-red-50">{formatNumber(row.kambalaNseAmount)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-purple-600 bg-purple-50">{formatNumber(row.kambalaMcxAmount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-slate-600">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className="flex items-center px-3 text-sm text-slate-600">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {!kambalaFile || !codeFile ? (
