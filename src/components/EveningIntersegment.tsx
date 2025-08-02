@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
-import { Upload, Download, FileSpreadsheet, Calculator, RefreshCw, Package } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, Calculator, RefreshCw, Package, BarChart3 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
 import AdvancedFilters from './AdvancedFilters';
+import DataVisualization from './DataVisualization';
 
 interface KambalaData {
   Entity: string;
@@ -41,6 +42,7 @@ const EveningIntersegment: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+  const [showVisualization, setShowVisualization] = useState(false);
 
   // Advanced filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -229,12 +231,12 @@ const EveningIntersegment: React.FC = () => {
           const newMarginUsed = marginUsed + (marginUsed * 0.01); // margin used + 1% of margin used
           const calculatedAmount = newMarginUsed - (cash + payin);
           
-          kambalaNseAmount = -calculatedAmount; // Negative for NSE
-          kambalaMcxAmount = calculatedAmount;   // Positive for MCX
+          kambalaNseAmount = Math.round(-calculatedAmount); // Negative for NSE, rounded
+          kambalaMcxAmount = Math.round(calculatedAmount);   // Positive for MCX, rounded
         } else {
           // If uncleared cash is 0, use original calculation
-          kambalaNseAmount = -margin99; // Negative 99% margin for NSE
-          kambalaMcxAmount = margin99;  // Positive 99% margin for MCX
+          kambalaNseAmount = Math.round(-margin99); // Negative 99% margin for NSE, rounded
+          kambalaMcxAmount = Math.round(margin99);  // Positive 99% margin for MCX, rounded
         }
 
         return {
@@ -293,7 +295,8 @@ const EveningIntersegment: React.FC = () => {
       if ((cash + payin) < marginUsed) {
         nseAmount = (collateralTotal - marginUsed) * -1;
       } else {
-        nseAmount = row.margin1;
+        // Updated calculation: 1% margin + margin used
+        nseAmount = row.margin1 + marginUsed;
       }
       
       return `${currentDate},FO,M50302,90221,,${row.Entity},C,${nseAmount},,,,,,,D`;
@@ -507,14 +510,31 @@ const EveningIntersegment: React.FC = () => {
               Process Kambala Excel file with Evening Intersegment codes and generate globe files
             </p>
           </div>
-          {processedData.length > 0 && (
-            <Button onClick={resetForNewUpload} variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Upload New Files
-            </Button>
-          )}
+          <div className="flex space-x-3">
+            {processedData.length > 0 && (
+              <>
+                <Button 
+                  onClick={() => setShowVisualization(!showVisualization)} 
+                  variant="outline" 
+                  className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                >
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  {showVisualization ? 'Hide Charts' : 'Show Charts'}
+                </Button>
+                <Button onClick={resetForNewUpload} variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Upload New Files
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Data Visualization */}
+      {processedData.length > 0 && showVisualization && (
+        <DataVisualization data={processedData} />
+      )}
 
       {/* Permanent Summary Cards - Always visible if there's processed data */}
       {processedData.length > 0 && (
