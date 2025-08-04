@@ -1,3 +1,4 @@
+
 import * as XLSX from 'xlsx';
 
 export interface BrokerageData {
@@ -346,8 +347,8 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
               }
             }
             
-            // Check if next row is empty
-            if (sourceCurrRow + 1 >= sheetData.length || String(sheetData[sourceCurrRow + 1][0] || '').trim() === '') {
+            // Check if next row has data in column 1 - if yes, exit loop
+            if (sourceCurrRow + 1 >= sheetData.length || String(sheetData[sourceCurrRow + 1][0] || '').trim() !== '') {
               if (NSEFUT !== '' && NSEOPT === '') {
                 NSEOPT = '20.00';
               }
@@ -415,8 +416,8 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
               }
             }
             
-            // Check if next row is empty
-            if (sourceCurrRow + 1 >= sheetData.length || String(sheetData[sourceCurrRow + 1][0] || '').trim() === '') {
+            // Check if next row has data in column 1 - if yes, exit loop
+            if (sourceCurrRow + 1 >= sheetData.length || String(sheetData[sourceCurrRow + 1][0] || '').trim() !== '') {
               if (CDFUT !== '' && CDOPT === '') {
                 CDOPT = '20.00';
               }
