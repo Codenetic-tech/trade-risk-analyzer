@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ const Brokerage: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [processedData, setProcessedData] = useState<BrokerageData[]>([]);
   const [summary, setSummary] = useState<BrokerageSummary | null>(null);
+  const [orderClientData, setOrderClientData] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +30,7 @@ const Brokerage: React.FC = () => {
       
       setProcessedData(result.data);
       setSummary(result.summary);
+      setOrderClientData(result.orderClientData || []);
       setIsUploadModalOpen(false);
     } catch (error) {
       console.error('Error processing files:', error);
@@ -130,7 +131,11 @@ const Brokerage: React.FC = () => {
 
       {/* Results Table */}
       {processedData.length > 0 && summary && (
-        <BrokerageTable data={processedData} summary={summary} />
+        <BrokerageTable 
+          data={processedData} 
+          summary={summary} 
+          orderClientData={orderClientData}
+        />
       )}
 
       {/* Upload Modal */}

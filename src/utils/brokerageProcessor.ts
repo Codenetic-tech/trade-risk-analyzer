@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 
 export interface BrokerageData {
   clientCode: string;
@@ -21,71 +22,8 @@ export interface BrokerageSummary {
 interface ProcessedBrokerageResult {
   data: BrokerageData[];
   summary: BrokerageSummary;
+  orderClientData: string[];
 }
-
-// Helper function to parse CSV with proper header detection
-const parseCSV = (csvText: string): any[] => {
-  const lines = csvText.trim().split('\n');
-  if (lines.length < 2) return [];
-  
-  // Get headers from first line - handle both tab and comma separators
-  let headers: string[] = [];
-  let delimiter = '\t';
-  
-  // Try tab first, then comma
-  if (lines[0].includes('\t')) {
-    headers = lines[0].split('\t').map(h => h.trim().replace(/"/g, ''));
-  } else if (lines[0].includes(',')) {
-    delimiter = ',';
-    headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-  } else {
-    // Single column case - might need special handling
-    headers = [lines[0].trim().replace(/"/g, '')];
-  }
-  
-  console.log('CSV Headers detected:', headers);
-  console.log('Using delimiter:', delimiter === '\t' ? 'TAB' : 'COMMA');
-  
-  const data = [];
-  
-  // Process data lines (skip header)
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    
-    const values = line.split(delimiter).map(v => v.trim().replace(/"/g, ''));
-    
-    // Only process if we have the right number of columns or at least some data
-    if (values.length >= headers.length || (values.length > 1 && headers.length === 1)) {
-      const row: any = {};
-      
-      // If headers don't match expected format, try to map directly
-      if (headers.length === 9 && headers[0].toUpperCase().includes('CLIENT')) {
-        // Direct mapping for the expected 9-column format
-        row.CLIENTCODE = values[0] || '';
-        row.MCXFUT = values[1] || '0';
-        row.MCXOPT = values[2] || '0';
-        row.NSEFUT = values[3] || '0';
-        row.NSEOPT = values[4] || '0';
-        row.CASHINT = values[5] || '0';
-        row.CASHDEL = values[6] || '0';
-        row.CDFUT = values[7] || '0';
-        row.CDOPT = values[8] || '0';
-      } else {
-        // Fallback to header-based mapping
-        headers.forEach((header, index) => {
-          row[header] = values[index] || '';
-        });
-      }
-      
-      data.push(row);
-    }
-  }
-  
-  console.log('Parsed CSV data:', data.length, 'rows');
-  console.log('Sample row:', data[0]);
-  return data;
-};
 
 // Function to calculate option additions based on VBA logic
 const calculateOptAddition = (optValue: number): number => {
@@ -97,65 +35,465 @@ const calculateOptAddition = (optValue: number): number => {
   return 0;
 };
 
+// Function to parse space-separated values like VBA's Split function
+const parseSpaceSeparatedValues = (text: string): string[] => {
+  if (!text) return [];
+  return text.trim().split(/\s+/).filter(item => item.length > 0);
+};
+
+// Function to safely parse numeric values
+const parseNumericValue = (value: string | number): number => {
+  if (typeof value === 'number') return value;
+  if (!value || value === '') return 0;
+  const parsed = parseFloat(String(value));
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 export const processBrokerageData = async (dataFile: File, basketFile?: File | null): Promise<ProcessedBrokerageResult> => {
   try {
-    console.log('Starting to process brokerage data...');
-    const dataText = await dataFile.text();
-    console.log('Raw file content preview:', dataText.substring(0, 500));
+    console.log('Starting to process brokerage XLSX data...');
     
-    const csvData = parseCSV(dataText);
-    console.log('Parsed CSV data count:', csvData.length);
-
-    if (csvData.length === 0) {
-      throw new Error('No data found in the uploaded file. Please check the file format.');
+    // Read the Excel file
+    const arrayBuffer = await dataFile.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    
+    // Get the "Data" sheet
+    const dataSheetName = 'Data';
+    if (!workbook.SheetNames.includes(dataSheetName)) {
+      throw new Error('Data sheet not found in the Excel file. Please ensure the sheet is named "Data".');
     }
-
-    // Parse basket file if provided
-    let basketData: any[] = [];
+    
+    const dataSheet = workbook.Sheets[dataSheetName];
+    const sheetData = XLSX.utils.sheet_to_json(dataSheet, { header: 1, defval: '' }) as any[][];
+    
+    console.log('Sheet data loaded:', sheetData.length, 'rows');
+    
+    // Validate data format (check row 2 for "Particular" and "Client Detail")
+    if (sheetData.length < 2 || 
+        String(sheetData[1][0]).trim() !== 'Particular' || 
+        String(sheetData[1][1]).trim() !== 'Client Detail') {
+      throw new Error('Data format is not proper. Row 2 should have "Particular" in column A and "Client Detail" in column B.');
+    }
+    
+    // Process basket file if provided
+    let basketData: string[] = [];
     if (basketFile) {
-      const basketText = await basketFile.text();
-      basketData = parseCSV(basketText);
-      console.log('Parsed basket data:', basketData.length);
+      const basketBuffer = await basketFile.arrayBuffer();
+      const basketWorkbook = XLSX.read(basketBuffer, { type: 'array' });
+      if (basketWorkbook.SheetNames.includes('Order Basket')) {
+        const basketSheet = basketWorkbook.Sheets['Order Basket'];
+        const basketSheetData = XLSX.utils.sheet_to_json(basketSheet, { header: 1, defval: '' }) as any[][];
+        basketData = basketSheetData.map(row => String(row[0] || '').trim()).filter(item => item.length > 0);
+      }
     }
-
-    // Process and map the data to our interface
-    const processedData: BrokerageData[] = csvData.map((row, index) => {
-      console.log(`Processing row ${index + 1}:`, row);
+    
+    console.log('Basket data loaded:', basketData.length, 'items');
+    
+    const processedData: BrokerageData[] = [];
+    const orderClientData: string[] = [];
+    
+    // Variables matching VBA code
+    let UCC = '';
+    let MCXFUT = '';
+    let MCXOPT = '';
+    let NSEFUT = '';
+    let NSEOPT = '';
+    let CASHINT = '';
+    let CASHDEL = '';
+    let CDFUT = '';
+    let CDOPT = '';
+    let basketFound = false;
+    
+    // Process each row
+    for (let sourceCurrRow = 0; sourceCurrRow < sheetData.length; sourceCurrRow++) {
+      const row = sheetData[sourceCurrRow];
+      const col1Data = String(row[0] || '').trim();
+      const col2Data = String(row[1] || '').trim();
       
-      // Handle different possible column names/formats
-      const clientCode = String(
-        row.CLIENTCODE || row.clientCode || row.ClientCode || 
-        row['Client Code'] || row.CLIENT_CODE || ''
-      ).trim();
+      console.log(`Processing row ${sourceCurrRow + 1}: "${col1Data}"`);
       
-      const mcxFut = parseFloat(String(row.MCXFUT || row.mcxFut || row.McxFut || 0));
-      const mcxOpt = parseFloat(String(row.MCXOPT || row.mcxOpt || row.McxOpt || 0));
-      const nseFut = parseFloat(String(row.NSEFUT || row.nseFut || row.NseFut || 0));
-      const nseOpt = parseFloat(String(row.NSEOPT || row.nseOpt || row.NseOpt || 0));
-      const cashInt = parseFloat(String(row.CASHINT || row.cashInt || row.CashInt || 0));
-      const cashDel = parseFloat(String(row.CASHDEL || row.cashDel || row.CashDel || 0));
-      const cdFut = parseFloat(String(row.CDFUT || row.cdFut || row.CdFut || 0));
-      const cdOpt = parseFloat(String(row.CDOPT || row.cdOpt || row.CdOpt || 0));
-
-      const processedRow = {
-        clientCode,
-        mcxFut: isNaN(mcxFut) ? 0 : mcxFut,
-        mcxOpt: isNaN(mcxOpt) ? 0 : mcxOpt,
-        nseFut: isNaN(nseFut) ? 0 : nseFut,
-        nseOpt: isNaN(nseOpt) ? 0 : nseOpt,
-        cashInt: isNaN(cashInt) ? 0 : cashInt,
-        cashDel: isNaN(cashDel) ? 0 : cashDel,
-        cdFut: isNaN(cdFut) ? 0 : cdFut,
-        cdOpt: isNaN(cdOpt) ? 0 : cdOpt,
+      switch (col1Data) {
+        case 'UCC (Alias):':
+          // Save previous UCC data if exists
+          if (UCC !== '') {
+            if (basketFound) {
+              // Reset all values to 0 if basket was found
+              MCXFUT = '0';
+              MCXOPT = '0';
+              NSEFUT = '0';
+              NSEOPT = '0';
+              CASHINT = '0';
+              CASHDEL = '0';
+              CDFUT = '0';
+              CDOPT = '0';
+              orderClientData.push(UCC);
+            }
+            
+            // Save the processed data
+            const brokerageRecord: BrokerageData = {
+              clientCode: UCC,
+              mcxFut: parseNumericValue(MCXFUT),
+              mcxOpt: parseNumericValue(MCXOPT),
+              nseFut: parseNumericValue(NSEFUT),
+              nseOpt: parseNumericValue(NSEOPT),
+              cashInt: parseNumericValue(CASHINT),
+              cashDel: parseNumericValue(CASHDEL),
+              cdFut: parseNumericValue(CDFUT),
+              cdOpt: parseNumericValue(CDOPT),
+            };
+            processedData.push(brokerageRecord);
+            
+            // Reset variables
+            MCXFUT = '';
+            MCXOPT = '';
+            NSEFUT = '';
+            NSEOPT = '';
+            CASHINT = '';
+            CASHDEL = '';
+            CDFUT = '';
+            CDOPT = '';
+          }
+          
+          UCC = col2Data;
+          basketFound = false;
+          console.log('Found UCC:', UCC);
+          break;
+          
+        case 'In NSE-CM:Specific':
+        case 'In NSE-CM:Basket':
+          // Check for basket name
+          if (col2Data.includes(']')) {
+            const basketName = col2Data.split(']')[0];
+            const cleanBasketName = basketName.replace('[', '').trim();
+            if (basketData.includes(cleanBasketName)) {
+              basketFound = true;
+              continue;
+            }
+          }
+          
+          // Process NSE-CM data
+          let cmMode = '';
+          for (let i = 1; i <= 10; i++) {
+            if (sourceCurrRow + i >= sheetData.length) break;
+            const nextRow = sheetData[sourceCurrRow + i];
+            const mode = String(nextRow[0] || '').trim();
+            if (mode === '(Squared-Off)' || mode === '(Delivery)') {
+              cmMode = mode;
+              sourceCurrRow += i;
+              break;
+            }
+            if (String(nextRow[1] || '').trim() === '') {
+              sourceCurrRow = sourceCurrRow + i - 1;
+              break;
+            }
+          }
+          
+          if (sourceCurrRow + 1 < sheetData.length) {
+            sourceCurrRow++;
+            const dataRow = sheetData[sourceCurrRow];
+            const col2Text = String(dataRow[1] || '').trim();
+            const values = parseSpaceSeparatedValues(col2Text);
+            
+            if (values.length >= 3) {
+              const col1 = values[0];
+              const col2 = values[1];
+              const col3 = values[2];
+              
+              if (cmMode === '(Delivery)' && col1 === 'ALL' && parseNumericValue(col2) !== 0) {
+                CASHDEL = col2;
+              }
+              
+              if (cmMode === '(Squared-Off)' && col1 === 'ALL' && parseNumericValue(col3) !== 0) {
+                CASHINT = col3;
+              }
+            }
+          }
+          break;
+          
+        case 'In NSE-F&O:Specific':
+        case 'In NSE-F&O:Basket':
+          // Check for basket name
+          if (col2Data.includes(']')) {
+            const basketName = col2Data.split(']')[0];
+            const cleanBasketName = basketName.replace('[', '').trim();
+            if (basketData.includes(cleanBasketName)) {
+              basketFound = true;
+              continue;
+            }
+          }
+          
+          // Find (Squared-Off) line
+          for (let i = 1; i <= 10; i++) {
+            if (sourceCurrRow + i >= sheetData.length) break;
+            const nextRow = sheetData[sourceCurrRow + i];
+            if (String(nextRow[0] || '').trim() === '(Squared-Off)') {
+              sourceCurrRow += i;
+              break;
+            }
+            if (String(nextRow[1] || '').trim() === '') {
+              sourceCurrRow = sourceCurrRow + i - 1;
+              break;
+            }
+          }
+          
+          // Process NSE F&O data
+          while (sourceCurrRow + 1 < sheetData.length) {
+            sourceCurrRow++;
+            const dataRow = sheetData[sourceCurrRow];
+            const col2Text = String(dataRow[1] || '').trim();
+            const values = parseSpaceSeparatedValues(col2Text);
+            
+            if (values.length >= 5) {
+              const col1 = values[0];
+              const col3 = values[2];
+              const col5 = values[4];
+              const col6 = values[5];
+              
+              if (col1 === 'ALL') {
+                if (parseNumericValue(col3) !== 0) {
+                  NSEFUT = col3;
+                }
+                if (parseNumericValue(col5) !== 0) {
+                  NSEOPT = col5;
+                }
+              } else if (col1 === 'ALLFUT') {
+                NSEFUT = parseNumericValue(col3) === 0 ? '0.01' : col3;
+              } else if (col1 === 'ALLOPT' || col1 === 'ALLSTK' || col1 === 'ALLOID') {
+                if (parseNumericValue(col5) !== 0) {
+                  if (parseNumericValue(NSEOPT) < parseNumericValue(col5)) {
+                    NSEOPT = col5;
+                  }
+                } else if (col6 && parseNumericValue(NSEOPT) < parseNumericValue(col6)) {
+                  NSEOPT = col6;
+                }
+              }
+            }
+            
+            // Check if next row is empty
+            if (sourceCurrRow + 1 >= sheetData.length || String(sheetData[sourceCurrRow + 1][0] || '').trim() === '') {
+              if (NSEFUT !== '' && NSEOPT === '') {
+                NSEOPT = '20.00';
+              }
+              break;
+            }
+          }
+          
+          if (NSEFUT === '' && parseNumericValue(NSEOPT) !== 0) {
+            NSEFUT = '0.01';
+          }
+          break;
+          
+        case 'In NSE-CDS:Specific':
+        case 'In NSE-CDS:Basket':
+          // Similar logic for CDS
+          if (col2Data.includes(']')) {
+            const basketName = col2Data.split(']')[0];
+            const cleanBasketName = basketName.replace('[', '').trim();
+            if (basketData.includes(cleanBasketName)) {
+              basketFound = true;
+              continue;
+            }
+          }
+          
+          // Find (Squared-Off) line
+          for (let i = 1; i <= 10; i++) {
+            if (sourceCurrRow + i >= sheetData.length) break;
+            const nextRow = sheetData[sourceCurrRow + i];
+            if (String(nextRow[0] || '').trim() === '(Squared-Off)') {
+              sourceCurrRow += i;
+              break;
+            }
+            if (String(nextRow[1] || '').trim() === '') {
+              sourceCurrRow = sourceCurrRow + i - 1;
+              break;
+            }
+          }
+          
+          // Process CDS data
+          while (sourceCurrRow + 1 < sheetData.length) {
+            sourceCurrRow++;
+            const dataRow = sheetData[sourceCurrRow];
+            const col2Text = String(dataRow[1] || '').trim();
+            const values = parseSpaceSeparatedValues(col2Text);
+            
+            if (values.length >= 5) {
+              const col1 = values[0];
+              const col3 = values[2];
+              const col5 = values[4];
+              const col6 = values[5];
+              
+              if (col1 === 'ALL') {
+                if (parseNumericValue(col3) !== 0) {
+                  CDFUT = col3;
+                }
+                if (parseNumericValue(col5) !== 0) {
+                  CDOPT = col5;
+                }
+              } else if (col1 === 'ALLFUT') {
+                CDFUT = parseNumericValue(col3) === 0 ? '0.01' : col3;
+              } else if (col1 === 'ALLOPT') {
+                CDOPT = parseNumericValue(col5) !== 0 ? col5 : col6;
+              }
+            }
+            
+            // Check if next row is empty
+            if (sourceCurrRow + 1 >= sheetData.length || String(sheetData[sourceCurrRow + 1][0] || '').trim() === '') {
+              if (CDFUT !== '' && CDOPT === '') {
+                CDOPT = '20.00';
+              }
+              break;
+            }
+          }
+          
+          if (CDFUT === '' && parseNumericValue(CDOPT) !== 0) {
+            CDFUT = '0.01';
+          }
+          break;
+          
+        case 'In MCX:Specific':
+        case 'In MCX:Basket':
+          // Check for basket name
+          if (col2Data.includes(']')) {
+            const basketName = col2Data.split(']')[0];
+            const cleanBasketName = basketName.replace('[', '').trim();
+            if (basketData.includes(cleanBasketName)) {
+              basketFound = true;
+              continue;
+            }
+          }
+          
+          // Find (Squared-Off) line
+          for (let i = 1; i <= 10; i++) {
+            if (sourceCurrRow + i >= sheetData.length) break;
+            const nextRow = sheetData[sourceCurrRow + i];
+            if (String(nextRow[0] || '').trim() === '(Squared-Off)') {
+              sourceCurrRow += i;
+              break;
+            }
+            if (String(nextRow[1] || '').trim() === '') {
+              sourceCurrRow = sourceCurrRow + i - 1;
+              break;
+            }
+          }
+          
+          // Process MCX FUT data
+          const arrFUT: string[][] = [];
+          while (sourceCurrRow + 1 < sheetData.length) {
+            sourceCurrRow++;
+            const dataRow = sheetData[sourceCurrRow];
+            const col2Text = String(dataRow[1] || '').trim();
+            const values = parseSpaceSeparatedValues(col2Text);
+            
+            if (values.length >= 3) {
+              const col1 = values[0];
+              const col2 = values[1];
+              const col3 = values[2];
+              const col4 = values[3];
+              const col5 = values[4];
+              const col6 = values[5];
+              
+              if (col1 === 'ALLFUT' || col1 === 'ALL') {
+                arrFUT.push([col1, col3, col5, col6]);
+                
+                if (col5 === 'MktRate' || col5 === 'Turnover') {
+                  MCXFUT = parseNumericValue(col3) === 0 ? '0.01' : col3;
+                  break;
+                }
+                if (col4 === 'Turnover') {
+                  MCXFUT = parseNumericValue(col2) === 0 ? '0.01' : col2;
+                  break;
+                }
+                if (col1 === 'ALL' && parseNumericValue(col5) !== 0) {
+                  MCXOPT = col5;
+                }
+              } else {
+                if (arrFUT.length > 0) {
+                  MCXFUT = parseNumericValue(arrFUT[0][1]) === 0 ? '0.01' : arrFUT[0][1];
+                }
+                break;
+              }
+            } else {
+              break;
+            }
+          }
+          
+          // Process MCX OPT data
+          while (sourceCurrRow < sheetData.length) {
+            const dataRow = sheetData[sourceCurrRow];
+            const col2Text = String(dataRow[1] || '').trim();
+            
+            if (!col2Text) {
+              if (MCXFUT !== '' && MCXOPT === '') {
+                MCXOPT = '20.00';
+              }
+              break;
+            }
+            
+            const values = parseSpaceSeparatedValues(col2Text);
+            
+            if (values.length >= 5) {
+              const col1 = values[0];
+              const col5 = values[4];
+              const col6 = values[5];
+              
+              if (col1 === 'ALLOPT') {
+                MCXOPT = col5 === 'MktRate' ? col6 : col5;
+                break;
+              }
+            }
+            
+            sourceCurrRow++;
+          }
+          break;
+      }
+    }
+    
+    // Save the last UCC if exists
+    if (UCC !== '') {
+      if (basketFound) {
+        MCXFUT = '0';
+        MCXOPT = '0';
+        NSEFUT = '0';
+        NSEOPT = '0';
+        CASHINT = '0';
+        CASHDEL = '0';
+        CDFUT = '0';
+        CDOPT = '0';
+        orderClientData.push(UCC);
+      }
+      
+      const brokerageRecord: BrokerageData = {
+        clientCode: UCC,
+        mcxFut: parseNumericValue(MCXFUT),
+        mcxOpt: parseNumericValue(MCXOPT),
+        nseFut: parseNumericValue(NSEFUT),
+        nseOpt: parseNumericValue(NSEOPT),
+        cashInt: parseNumericValue(CASHINT),
+        cashDel: parseNumericValue(CASHDEL),
+        cdFut: parseNumericValue(CDFUT),
+        cdOpt: parseNumericValue(CDOPT),
       };
+      processedData.push(brokerageRecord);
+    }
+    
+    // Apply option additions and rounding like VBA
+    processedData.forEach(record => {
+      // Add option additions
+      record.mcxOpt += calculateOptAddition(record.mcxOpt);
+      record.nseOpt += calculateOptAddition(record.nseOpt);
+      record.cdOpt += calculateOptAddition(record.cdOpt);
       
-      console.log(`Processed row ${index + 1}:`, processedRow);
-      return processedRow;
-    }).filter(item => item.clientCode && item.clientCode.length > 0); // Remove empty client codes
-
-    console.log('Final processed data count:', processedData.length);
-    console.log('Sample processed data:', processedData.slice(0, 3));
-
+      // Round values to 3 decimal places
+      record.mcxFut = Math.round(record.mcxFut * 1000) / 1000;
+      record.nseFut = Math.round(record.nseFut * 1000) / 1000;
+      record.cashInt = Math.round(record.cashInt * 1000) / 1000;
+      record.cashDel = Math.round(record.cashDel * 1000) / 1000;
+      record.cdFut = Math.round(record.cdFut * 1000) / 1000;
+    });
+    
+    console.log('Final processed data:', processedData.length, 'records');
+    console.log('Order client data:', orderClientData.length, 'records');
+    
     const summary: BrokerageSummary = {
       totalClients: processedData.length,
       activeRecords: processedData.filter(item => 
@@ -165,17 +503,16 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
       basketOrders: basketData.length,
       outputFiles: 3,
     };
-
-    console.log('Final summary:', summary);
-
-    return { data: processedData, summary };
-
+    
+    return { data: processedData, summary, orderClientData };
+    
   } catch (error) {
     console.error('Error processing brokerage data:', error);
-    throw new Error(`Failed to process brokerage files: ${error instanceof Error ? error.message : 'Unknown error'}. Please check file formats and try again.`);
+    throw new Error(`Failed to process brokerage file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
+// Export functions remain the same but need to accept orderClientData
 export const exportBrokerageData = (data: BrokerageData[]): void => {
   const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   
@@ -215,19 +552,19 @@ export const exportBrokerageData = (data: BrokerageData[]): void => {
   window.URL.revokeObjectURL(url);
 };
 
-export const exportOrderClient = (data: BrokerageData[]): void => {
+export const exportOrderClient = (data: BrokerageData[], orderClientData: string[]): void => {
   const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   
   let content = 'RMS Limits\n';
   
-  // Add NSEOR entries
+  // Add NSEOR entries for clients with NSE/Cash activity
   data.forEach(row => {
     if (row.nseFut > 0 || row.nseOpt > 0 || row.cashInt > 0 || row.cashDel > 0) {
       content += `${row.clientCode}||||||||||||||||NSEOR\n`;
     }
   });
   
-  // Add MCXOR entries
+  // Add MCXOR entries for clients with MCX activity  
   data.forEach(row => {
     if (row.mcxFut > 0 || row.mcxOpt > 0) {
       content += `${row.clientCode}||COM||||||||||||||MCXOR\n`;

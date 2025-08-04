@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import {
   Table,
@@ -30,9 +29,14 @@ import { Search, Download, FileText, Users } from 'lucide-react';
 interface BrokerageTableProps {
   data: BrokerageData[];
   summary: BrokerageSummary;
+  orderClientData?: string[];
 }
 
-export const BrokerageTable: React.FC<BrokerageTableProps> = ({ data, summary }) => {
+export const BrokerageTable: React.FC<BrokerageTableProps> = ({ 
+  data, 
+  summary, 
+  orderClientData = [] 
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -194,7 +198,7 @@ export const BrokerageTable: React.FC<BrokerageTableProps> = ({ data, summary })
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Button
-              onClick={() => exportOrderClient(filteredData)}
+              onClick={() => exportOrderClient(filteredData, orderClientData)}
               className="bg-blue-600 hover:bg-blue-700 w-full"
             >
               <FileText className="h-4 w-4 mr-2" />

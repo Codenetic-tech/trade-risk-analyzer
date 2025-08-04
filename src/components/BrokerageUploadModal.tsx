@@ -57,7 +57,7 @@ export const BrokerageUploadModal: React.FC<BrokerageUploadModalProps> = ({
             <span>Upload Brokerage Files</span>
           </DialogTitle>
           <DialogDescription>
-            Upload the data file and optionally the order basket file to process brokerage data.
+            Upload the Excel data file (.xlsx) and optionally the order basket file to process brokerage data.
           </DialogDescription>
         </DialogHeader>
 
@@ -68,7 +68,7 @@ export const BrokerageUploadModal: React.FC<BrokerageUploadModalProps> = ({
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                 <span>Data File (Required)</span>
               </CardTitle>
-              <CardDescription>Upload the main data CSV file</CardDescription>
+              <CardDescription>Upload the main Excel file (.xlsx) with "Data" sheet</CardDescription>
             </CardHeader>
             <CardContent>
               {dataFile ? (
@@ -99,7 +99,7 @@ export const BrokerageUploadModal: React.FC<BrokerageUploadModalProps> = ({
                   <input
                     id="data-upload-modal"
                     type="file"
-                    accept=".csv"
+                    accept=".xlsx,.xls"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -117,7 +117,7 @@ export const BrokerageUploadModal: React.FC<BrokerageUploadModalProps> = ({
                 <FileSpreadsheet className="h-5 w-5 text-purple-600" />
                 <span>Order Basket File (Optional)</span>
               </CardTitle>
-              <CardDescription>Upload the order basket CSV file</CardDescription>
+              <CardDescription>Upload the order basket Excel file (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {basketFile ? (
@@ -148,7 +148,7 @@ export const BrokerageUploadModal: React.FC<BrokerageUploadModalProps> = ({
                   <input
                     id="basket-upload-modal"
                     type="file"
-                    accept=".csv"
+                    accept=".xlsx,.xls"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
