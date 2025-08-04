@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -9,6 +8,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import EveningIntersegment from './components/EveningIntersegment';
+import Brokerage from './components/Brokerage';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
@@ -54,6 +54,33 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/allocation-check" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/morning-bod" 
+          element={
+            <ProtectedRoute>
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-slate-700">Morning BOD</h2>
+                <p className="text-slate-500 mt-2">Morning BOD section coming soon...</p>
+              </div>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/brokerage" 
+          element={
+            <ProtectedRoute>
+              <Brokerage />
             </ProtectedRoute>
           } 
         />
