@@ -57,37 +57,91 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
     const arrayBuffer = await dataFile.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     
-    // Get the "Data" sheet
-    const dataSheetName = 'Data';
-    if (!workbook.SheetNames.includes(dataSheetName)) {
-      throw new Error('Data sheet not found in the Excel file. Please ensure the sheet is named "Data".');
+    console.log('Available sheet names:', workbook.SheetNames);
+    
+    // Look for the "Data" sheet (case insensitive)
+    let dataSheetName = workbook.SheetNames.find(name => 
+      name.toLowerCase().trim() === 'data'
+    );
+    
+    // If no "Data" sheet found, use the first sheet
+    if (!dataSheetName) {
+      console.log('No "Data" sheet found, using first sheet:', workbook.SheetNames[0]);
+      dataSheetName = workbook.SheetNames[0];
     }
+    
+    if (!dataSheetName) {
+      throw new Error('No sheets found in the Excel file.');
+    }
+    
+    console.log('Using sheet:', dataSheetName);
     
     const dataSheet = workbook.Sheets[dataSheetName];
     const sheetData = XLSX.utils.sheet_to_json(dataSheet, { header: 1, defval: '' }) as any[][];
     
     console.log('Sheet data loaded:', sheetData.length, 'rows');
+    console.log('First few rows:', sheetData.slice(0, 5));
     
     // Validate data format (check row 2 for "Particular" and "Client Detail")
-    if (sheetData.length < 2 || 
-        String(sheetData[1][0]).trim() !== 'Particular' || 
-        String(sheetData[1][1]).trim() !== 'Client Detail') {
-      throw new Error('Data format is not proper. Row 2 should have "Particular" in column A and "Client Detail" in column B.');
+    if (sheetData.length < 2) {
+      throw new Error('Excel file appears to be empty or has insufficient data.');
+    }
+    
+    // Check for the expected headers (more flexible checking)
+    const row2Col1 = String(sheetData[1]?.[0] || '').trim();
+    const row2Col2 = String(sheetData[1]?.[1] || '').trim();
+    
+    console.log('Row 2 data:', { col1: row2Col1, col2: row2Col2 });
+    
+    if (row2Col1 !== 'Particular' || row2Col2 !== 'Client Detail') {
+      console.log('Expected headers not found in row 2, checking other rows...');
+      
+      // Try to find the header row
+      let headerRowIndex = -1;
+      for (let i = 0; i < Math.min(10, sheetData.length); i++) {
+        const col1 = String(sheetData[i]?.[0] || '').trim();
+        const col2 = String(sheetData[i]?.[1] || '').trim();
+        if (col1 === 'Particular' && col2 === 'Client Detail') {
+          headerRowIndex = i;
+          break;
+        }
+      }
+      
+      if (headerRowIndex === -1) {
+        throw new Error('Data format is not proper. Could not find "Particular" in column A and "Client Detail" in column B in the first 10 rows.');
+      }
+      
+      console.log('Found headers at row:', headerRowIndex + 1);
     }
     
     // Process basket file if provided
     let basketData: string[] = [];
     if (basketFile) {
-      const basketBuffer = await basketFile.arrayBuffer();
-      const basketWorkbook = XLSX.read(basketBuffer, { type: 'array' });
-      if (basketWorkbook.SheetNames.includes('Order Basket')) {
-        const basketSheet = basketWorkbook.Sheets['Order Basket'];
-        const basketSheetData = XLSX.utils.sheet_to_json(basketSheet, { header: 1, defval: '' }) as any[][];
-        basketData = basketSheetData.map(row => String(row[0] || '').trim()).filter(item => item.length > 0);
+      try {
+        const basketBuffer = await basketFile.arrayBuffer();
+        const basketWorkbook = XLSX.read(basketBuffer, { type: 'array' });
+        console.log('Basket file sheet names:', basketWorkbook.SheetNames);
+        
+        // Look for "Order Basket" sheet (case insensitive)
+        let basketSheetName = basketWorkbook.SheetNames.find(name => 
+          name.toLowerCase().trim() === 'order basket'
+        );
+        
+        if (!basketSheetName) {
+          console.log('No "Order Basket" sheet found, using first sheet');
+          basketSheetName = basketWorkbook.SheetNames[0];
+        }
+        
+        if (basketSheetName) {
+          const basketSheet = basketWorkbook.Sheets[basketSheetName];
+          const basketSheetData = XLSX.utils.sheet_to_json(basketSheet, { header: 1, defval: '' }) as any[][];
+          basketData = basketSheetData.map(row => String(row[0] || '').trim()).filter(item => item.length > 0);
+          console.log('Basket data loaded:', basketData.length, 'items');
+        }
+      } catch (basketError) {
+        console.log('Error processing basket file:', basketError);
       }
     }
-    
-    console.log('Basket data loaded:', basketData.length, 'items');
     
     const processedData: BrokerageData[] = [];
     const orderClientData: string[] = [];
