@@ -225,41 +225,63 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
             }
           }
           
-          // Process NSE-CM data
+          // Implement LoopCASH logic from VBA
           let cmMode = '';
-          for (let i = 1; i <= 10; i++) {
-            if (sourceCurrRow + i >= sheetData.length) break;
-            const nextRow = sheetData[sourceCurrRow + i];
-            const mode = String(nextRow[0] || '').trim();
-            if (mode === '(Squared-Off)' || mode === '(Delivery)') {
-              cmMode = mode;
-              sourceCurrRow += i;
-              break;
-            }
-            if (String(nextRow[1] || '').trim() === '') {
-              sourceCurrRow = sourceCurrRow + i - 1;
-              break;
-            }
-          }
+          let loopCASHContinue = true;
           
-          if (sourceCurrRow + 1 < sheetData.length) {
-            sourceCurrRow++;
-            const dataRow = sheetData[sourceCurrRow];
-            const col2Text = String(dataRow[1] || '').trim();
-            const values = parseSpaceSeparatedValues(col2Text);
+          while (loopCASHContinue) {
+            cmMode = '';
             
-            if (values.length >= 3) {
-              const col1 = values[0];
-              const col2 = values[1];
-              const col3 = values[2];
-              
-              if (cmMode === '(Delivery)' && col1 === 'ALL' && parseNumericValue(col2) !== 0) {
-                CASHDEL = col2;
+            // Find the mode (Squared-Off or Delivery)
+            for (let i = 1; i <= 10; i++) {
+              if (sourceCurrRow + i >= sheetData.length) break;
+              const nextRow = sheetData[sourceCurrRow + i];
+              const mode = String(nextRow[0] || '').trim();
+              if (mode === '(Squared-Off)' || mode === '(Delivery)') {
+                cmMode = mode;
+                sourceCurrRow += i;
+                break;
               }
-              
-              if (cmMode === '(Squared-Off)' && col1 === 'ALL' && parseNumericValue(col3) !== 0) {
-                CASHINT = col3;
+              if (String(nextRow[1] || '').trim() === '') {
+                sourceCurrRow = sourceCurrRow + i - 1;
+                loopCASHContinue = false;
+                break;
               }
+            }
+            
+            if (!loopCASHContinue || cmMode === '') break;
+            
+            // Get data from next row
+            if (sourceCurrRow + 1 < sheetData.length) {
+              sourceCurrRow++;
+              const dataRow = sheetData[sourceCurrRow];
+              const col2Text = String(dataRow[1] || '').trim();
+              const values = parseSpaceSeparatedValues(col2Text);
+              
+              if (values.length >= 3) {
+                const col1 = values[0];
+                const col2 = values[1];
+                const col3 = values[2];
+                
+                if (cmMode === '(Delivery)' && col1 === 'ALL') {
+                  if (parseNumericValue(col2) !== 0) {
+                    CASHDEL = col2;
+                  }
+                }
+                
+                if (cmMode === '(Squared-Off)' && col1 === 'ALL') {
+                  if (parseNumericValue(col3) !== 0) {
+                    CASHINT = col3;
+                  }
+                }
+              }
+            }
+            
+            // Check exit condition from VBA: If (CASHINT = "" And CASHDEL <> "") Or (CASHINT <> "" And CASHDEL = "")
+            if ((CASHINT === '' && CASHDEL !== '') || (CASHINT !== '' && CASHDEL === '')) {
+              // Continue loop
+            } else {
+              loopCASHContinue = false;
             }
           }
           break;
@@ -290,8 +312,9 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
             }
           }
           
-          // Process NSE F&O data
-          while (sourceCurrRow + 1 < sheetData.length) {
+          // Process NSE F&O data with LoopNSEFUT logic
+          let loopNSEFUTContinue = true;
+          while (loopNSEFUTContinue && sourceCurrRow + 1 < sheetData.length) {
             sourceCurrRow++;
             const dataRow = sheetData[sourceCurrRow];
             const col2Text = String(dataRow[1] || '').trim();
@@ -328,10 +351,11 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
               if (NSEFUT !== '' && NSEOPT === '') {
                 NSEOPT = '20.00';
               }
-              break;
+              loopNSEFUTContinue = false;
             }
           }
           
+          // LoopNSEOPT logic
           if (NSEFUT === '' && parseNumericValue(NSEOPT) !== 0) {
             NSEFUT = '0.01';
           }
@@ -363,8 +387,9 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
             }
           }
           
-          // Process CDS data
-          while (sourceCurrRow + 1 < sheetData.length) {
+          // Process CDS data with LoopCDFUT logic
+          let loopCDFUTContinue = true;
+          while (loopCDFUTContinue && sourceCurrRow + 1 < sheetData.length) {
             sourceCurrRow++;
             const dataRow = sheetData[sourceCurrRow];
             const col2Text = String(dataRow[1] || '').trim();
@@ -395,10 +420,11 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
               if (CDFUT !== '' && CDOPT === '') {
                 CDOPT = '20.00';
               }
-              break;
+              loopCDFUTContinue = false;
             }
           }
           
+          // LoopCDOPT logic
           if (CDFUT === '' && parseNumericValue(CDOPT) !== 0) {
             CDFUT = '0.01';
           }
@@ -432,7 +458,11 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
           
           // Process MCX FUT data
           const arrFUT: string[][] = [];
-          while (sourceCurrRow + 1 < sheetData.length) {
+          let i = 0;
+          
+          // LoopMCXFUT logic
+          let loopMCXFUTContinue = true;
+          while (loopMCXFUTContinue && sourceCurrRow + 1 < sheetData.length) {
             sourceCurrRow++;
             const dataRow = sheetData[sourceCurrRow];
             const col2Text = String(dataRow[1] || '').trim();
@@ -451,28 +481,39 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
                 
                 if (col5 === 'MktRate' || col5 === 'Turnover') {
                   MCXFUT = parseNumericValue(col3) === 0 ? '0.01' : col3;
+                  loopMCXFUTContinue = false;
                   break;
                 }
                 if (col4 === 'Turnover') {
                   MCXFUT = parseNumericValue(col2) === 0 ? '0.01' : col2;
+                  loopMCXFUTContinue = false;
                   break;
                 }
                 if (col1 === 'ALL' && parseNumericValue(col5) !== 0) {
                   MCXOPT = col5;
                 }
+                
+                if (parseNumericValue(col3) === 0 && parseNumericValue(col5) === 0) {
+                  // Don't increment i
+                } else {
+                  i++;
+                }
               } else {
                 if (arrFUT.length > 0) {
                   MCXFUT = parseNumericValue(arrFUT[0][1]) === 0 ? '0.01' : arrFUT[0][1];
                 }
+                loopMCXFUTContinue = false;
                 break;
               }
             } else {
+              loopMCXFUTContinue = false;
               break;
             }
           }
           
-          // Process MCX OPT data
-          while (sourceCurrRow < sheetData.length) {
+          // Process MCX OPT data - LoopMCXOPT logic
+          let loopMCXOPTContinue = true;
+          while (loopMCXOPTContinue && sourceCurrRow < sheetData.length) {
             const dataRow = sheetData[sourceCurrRow];
             const col2Text = String(dataRow[1] || '').trim();
             
@@ -480,6 +521,7 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
               if (MCXFUT !== '' && MCXOPT === '') {
                 MCXOPT = '20.00';
               }
+              loopMCXOPTContinue = false;
               break;
             }
             
@@ -492,6 +534,7 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
               
               if (col1 === 'ALLOPT') {
                 MCXOPT = col5 === 'MktRate' ? col6 : col5;
+                loopMCXOPTContinue = false;
                 break;
               }
             }
@@ -566,7 +609,6 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
   }
 };
 
-// Export functions remain the same but need to accept orderClientData
 export const exportBrokerageData = (data: BrokerageData[]): void => {
   const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   
