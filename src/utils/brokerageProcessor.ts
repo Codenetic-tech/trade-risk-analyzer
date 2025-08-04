@@ -28,9 +28,23 @@ const parseCSV = (csvText: string): any[] => {
   const lines = csvText.trim().split('\n');
   if (lines.length < 2) return [];
   
-  // Get headers from first line
-  const headers = lines[0].split('\t').map(h => h.trim().replace(/"/g, ''));
-  console.log('CSV Headers:', headers);
+  // Get headers from first line - handle both tab and comma separators
+  let headers: string[] = [];
+  let delimiter = '\t';
+  
+  // Try tab first, then comma
+  if (lines[0].includes('\t')) {
+    headers = lines[0].split('\t').map(h => h.trim().replace(/"/g, ''));
+  } else if (lines[0].includes(',')) {
+    delimiter = ',';
+    headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  } else {
+    // Single column case - might need special handling
+    headers = [lines[0].trim().replace(/"/g, '')];
+  }
+  
+  console.log('CSV Headers detected:', headers);
+  console.log('Using delimiter:', delimiter === '\t' ? 'TAB' : 'COMMA');
   
   const data = [];
   
@@ -39,17 +53,37 @@ const parseCSV = (csvText: string): any[] => {
     const line = lines[i].trim();
     if (!line) continue;
     
-    const values = line.split('\t').map(v => v.trim().replace(/"/g, ''));
-    if (values.length === headers.length) {
+    const values = line.split(delimiter).map(v => v.trim().replace(/"/g, ''));
+    
+    // Only process if we have the right number of columns or at least some data
+    if (values.length >= headers.length || (values.length > 1 && headers.length === 1)) {
       const row: any = {};
-      headers.forEach((header, index) => {
-        row[header] = values[index];
-      });
+      
+      // If headers don't match expected format, try to map directly
+      if (headers.length === 9 && headers[0].toUpperCase().includes('CLIENT')) {
+        // Direct mapping for the expected 9-column format
+        row.CLIENTCODE = values[0] || '';
+        row.MCXFUT = values[1] || '0';
+        row.MCXOPT = values[2] || '0';
+        row.NSEFUT = values[3] || '0';
+        row.NSEOPT = values[4] || '0';
+        row.CASHINT = values[5] || '0';
+        row.CASHDEL = values[6] || '0';
+        row.CDFUT = values[7] || '0';
+        row.CDOPT = values[8] || '0';
+      } else {
+        // Fallback to header-based mapping
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+      }
+      
       data.push(row);
     }
   }
   
   console.log('Parsed CSV data:', data.length, 'rows');
+  console.log('Sample row:', data[0]);
   return data;
 };
 
@@ -65,14 +99,15 @@ const calculateOptAddition = (optValue: number): number => {
 
 export const processBrokerageData = async (dataFile: File, basketFile?: File | null): Promise<ProcessedBrokerageResult> => {
   try {
-    // For now, let's directly parse the uploaded CSV as final output data
+    console.log('Starting to process brokerage data...');
     const dataText = await dataFile.text();
-    const csvData = parseCSV(dataText);
+    console.log('Raw file content preview:', dataText.substring(0, 500));
     
-    console.log('Processing CSV data:', csvData);
+    const csvData = parseCSV(dataText);
+    console.log('Parsed CSV data count:', csvData.length);
 
     if (csvData.length === 0) {
-      throw new Error('No data found in the uploaded file');
+      throw new Error('No data found in the uploaded file. Please check the file format.');
     }
 
     // Parse basket file if provided
@@ -83,17 +118,43 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
       console.log('Parsed basket data:', basketData.length);
     }
 
-    const processedData: BrokerageData[] = csvData.map(row => ({
-      clientCode: String(row.CLIENTCODE || row.clientCode || '').trim(),
-      mcxFut: parseFloat(String(row.MCXFUT || row.mcxFut || 0)),
-      mcxOpt: parseFloat(String(row.MCXOPT || row.mcxOpt || 0)),
-      nseFut: parseFloat(String(row.NSEFUT || row.nseFut || 0)),
-      nseOpt: parseFloat(String(row.NSEOPT || row.nseOpt || 0)),
-      cashInt: parseFloat(String(row.CASHINT || row.cashInt || 0)),
-      cashDel: parseFloat(String(row.CASHDEL || row.cashDel || 0)),
-      cdFut: parseFloat(String(row.CDFUT || row.cdFut || 0)),
-      cdOpt: parseFloat(String(row.CDOPT || row.cdOpt || 0)),
-    })).filter(item => item.clientCode); // Remove empty client codes
+    // Process and map the data to our interface
+    const processedData: BrokerageData[] = csvData.map((row, index) => {
+      console.log(`Processing row ${index + 1}:`, row);
+      
+      // Handle different possible column names/formats
+      const clientCode = String(
+        row.CLIENTCODE || row.clientCode || row.ClientCode || 
+        row['Client Code'] || row.CLIENT_CODE || ''
+      ).trim();
+      
+      const mcxFut = parseFloat(String(row.MCXFUT || row.mcxFut || row.McxFut || 0));
+      const mcxOpt = parseFloat(String(row.MCXOPT || row.mcxOpt || row.McxOpt || 0));
+      const nseFut = parseFloat(String(row.NSEFUT || row.nseFut || row.NseFut || 0));
+      const nseOpt = parseFloat(String(row.NSEOPT || row.nseOpt || row.NseOpt || 0));
+      const cashInt = parseFloat(String(row.CASHINT || row.cashInt || row.CashInt || 0));
+      const cashDel = parseFloat(String(row.CASHDEL || row.cashDel || row.CashDel || 0));
+      const cdFut = parseFloat(String(row.CDFUT || row.cdFut || row.CdFut || 0));
+      const cdOpt = parseFloat(String(row.CDOPT || row.cdOpt || row.CdOpt || 0));
+
+      const processedRow = {
+        clientCode,
+        mcxFut: isNaN(mcxFut) ? 0 : mcxFut,
+        mcxOpt: isNaN(mcxOpt) ? 0 : mcxOpt,
+        nseFut: isNaN(nseFut) ? 0 : nseFut,
+        nseOpt: isNaN(nseOpt) ? 0 : nseOpt,
+        cashInt: isNaN(cashInt) ? 0 : cashInt,
+        cashDel: isNaN(cashDel) ? 0 : cashDel,
+        cdFut: isNaN(cdFut) ? 0 : cdFut,
+        cdOpt: isNaN(cdOpt) ? 0 : cdOpt,
+      };
+      
+      console.log(`Processed row ${index + 1}:`, processedRow);
+      return processedRow;
+    }).filter(item => item.clientCode && item.clientCode.length > 0); // Remove empty client codes
+
+    console.log('Final processed data count:', processedData.length);
+    console.log('Sample processed data:', processedData.slice(0, 3));
 
     const summary: BrokerageSummary = {
       totalClients: processedData.length,
@@ -105,14 +166,13 @@ export const processBrokerageData = async (dataFile: File, basketFile?: File | n
       outputFiles: 3,
     };
 
-    console.log('Final processed data:', processedData);
-    console.log('Summary:', summary);
+    console.log('Final summary:', summary);
 
     return { data: processedData, summary };
 
   } catch (error) {
     console.error('Error processing brokerage data:', error);
-    throw new Error('Failed to process brokerage files. Please check file formats and try again.');
+    throw new Error(`Failed to process brokerage files: ${error instanceof Error ? error.message : 'Unknown error'}. Please check file formats and try again.`);
   }
 };
 
