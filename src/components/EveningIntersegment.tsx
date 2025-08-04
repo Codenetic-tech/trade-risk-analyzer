@@ -208,7 +208,8 @@ const EveningIntersegment: React.FC = () => {
           const newMarginUsed = marginUsed + (marginUsed * 0.01); // margin used + 1% of margin used
           const calculatedAmount = newMarginUsed - (cash + payin);
           
-          kambalaNseAmount = Math.round(-calculatedAmount); // Negative for NSE, rounded
+          // Fixed: Make sure the sign is correct - positive value for NSE (not negative)
+          kambalaNseAmount = Math.round(calculatedAmount); // Positive for NSE, rounded
           kambalaMcxAmount = Math.round(calculatedAmount);   // Positive for MCX, rounded
         } else {
           // If uncleared cash is 0, use original calculation
@@ -260,7 +261,7 @@ const EveningIntersegment: React.FC = () => {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
-    });
+    }).replace(/ /g, '-');
 
     const nseContent = processedData.map(row => {
       const cash = row.Cash;
@@ -298,7 +299,7 @@ const EveningIntersegment: React.FC = () => {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
-    });
+    }).replace(/ /g, '-');
 
     const mcxContent = processedData.map(row => 
       `${currentDate},CO,8090,46365,,${row.Entity},C,${row.margin99},,,,,,,A`
@@ -320,7 +321,7 @@ const EveningIntersegment: React.FC = () => {
     if (processedData.length === 0) return;
 
     const nseContent = processedData.map(row => {
-      return `${row.Entity}|||||||||||||||||no||||||||${row.kambalaNseAmount}`;
+      return `${row.Entity}|||||||||||||||||no||||||||${Math.round(row.kambalaNseAmount)}`;
     }).join('\n');
 
     const fullContent = 'RMS Limits\n' + nseContent;
@@ -338,7 +339,7 @@ const EveningIntersegment: React.FC = () => {
     if (processedData.length === 0) return;
 
     const mcxContent = processedData.map(row => 
-      `${row.Entity}||COM|||||||||||||||no||||||||${row.kambalaMcxAmount}`
+      `${row.Entity}||COM|||||||||||||||no||||||||${Math.round(row.kambalaMcxAmount)}`
     ).join('\n');
 
     const fullContent = 'RMS Limits\n' + mcxContent;

@@ -6,7 +6,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -109,12 +108,6 @@ export function AppSidebar() {
         </div>
 
         <SidebarGroup className={`transition-all duration-300 ${isCollapsed ? 'px-2 py-3' : 'px-4 py-4'}`}>
-          {/* Only show subheading when expanded */}
-          {!isCollapsed && (
-            <SidebarGroupLabel className="px-2 py-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
-              Navigation
-            </SidebarGroupLabel>
-          )}
           <SidebarGroupContent className="mt-2">
             <SidebarMenu className="space-y-1">
               {menuItems.map((item) => {
