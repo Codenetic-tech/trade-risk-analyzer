@@ -13,13 +13,13 @@ import {
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard,
-  Upload,
+  Sunrise,
   FileSpreadsheet,
+  TrendingUp,
+  Clock,
+  CheckSquare,
   Settings,
   Shield,
-  BarChart3,
-  Download,
-  Clock,
   ChevronRight,
 } from 'lucide-react';
 
@@ -28,49 +28,42 @@ const menuItems = [
     title: 'Dashboard',
     url: '/dashboard',
     icon: LayoutDashboard,
-    description: 'Overview & Analytics',
     color: 'text-blue-600'
   },
   {
-    title: 'File Upload',
-    url: '/upload',
-    icon: Upload,
-    description: 'Import Data Files',
-    color: 'text-green-600'
-  },
-  {
-    title: 'Risk Analysis',
-    url: '/analysis',
-    icon: BarChart3,
-    description: 'Risk Assessment Tools',
-    color: 'text-purple-600'
-  },
-  {
-    title: 'Evening Intersegment',
-    url: '/evening-intersegment',
-    icon: Clock,
-    description: 'End-of-Day Processing',
+    title: 'Morning BOD',
+    url: '/morning-bod',
+    icon: Sunrise,
     color: 'text-orange-600'
   },
   {
     title: 'Reports',
     url: '/reports',
     icon: FileSpreadsheet,
-    description: 'Generate Reports',
     color: 'text-indigo-600'
   },
   {
-    title: 'Downloads',
-    url: '/downloads',
-    icon: Download,
-    description: 'Export Center',
+    title: 'Brokerage',
+    url: '/brokerage',
+    icon: TrendingUp,
+    color: 'text-green-600'
+  },
+  {
+    title: 'Evening Intersegment',
+    url: '/evening-intersegment',
+    icon: Clock,
+    color: 'text-purple-600'
+  },
+  {
+    title: 'Allocation Check',
+    url: '/allocation-check',
+    icon: CheckSquare,
     color: 'text-teal-600'
   },
   {
     title: 'Settings',
     url: '/settings',
     icon: Settings,
-    description: 'System Configuration',
     color: 'text-slate-600'
   },
 ];
@@ -138,7 +131,6 @@ export function AppSidebar() {
                                 <span className="text-sm font-medium truncate">{item.title}</span>
                                 {isItemActive && <ChevronRight className="h-4 w-4 text-blue-600 flex-shrink-0" />}
                               </div>
-                              <p className="text-xs text-slate-500 truncate mt-0.5">{item.description}</p>
                             </div>
                           )}
                         </div>

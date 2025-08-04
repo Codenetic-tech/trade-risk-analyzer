@@ -277,7 +277,7 @@ const EveningIntersegment: React.FC = () => {
         nseAmount = row.margin1 + marginUsed;
       }
       
-      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${nseAmount},,,,,,,D`;
+      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(nseAmount)},,,,,,,D`;
     }).join('\n');
 
     const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
@@ -302,7 +302,7 @@ const EveningIntersegment: React.FC = () => {
     }).replace(/ /g, '-');
 
     const mcxContent = processedData.map(row => 
-      `${currentDate},CO,8090,46365,,${row.Entity},C,${row.margin99},,,,,,,A`
+      `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(row.margin99)},,,,,,,A`
     ).join('\n');
 
     const header = 'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENTS AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
