@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, FileText, Users, Download } from 'lucide-react';
+import { Upload, FileText, Users, Download, AlertCircle } from 'lucide-react';
 import { BrokerageUploadModal } from './BrokerageUploadModal';
 import { BrokerageTable } from './BrokerageTable';
 import { processBrokerageData, BrokerageData, BrokerageSummary } from '@/utils/brokerageProcessor';
@@ -12,21 +12,28 @@ const Brokerage: React.FC = () => {
   const [processedData, setProcessedData] = useState<BrokerageData[]>([]);
   const [summary, setSummary] = useState<BrokerageSummary | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFilesSelected = async (dataFile: File | null, basketFile: File | null) => {
     if (!dataFile) {
-      alert('Please select the data file');
+      setError('Please select the data file');
       return;
     }
 
     setIsProcessing(true);
+    setError(null);
+    
     try {
+      console.log('Processing files:', dataFile.name, basketFile?.name);
       const result = await processBrokerageData(dataFile, basketFile);
+      console.log('Processing result:', result);
+      
       setProcessedData(result.data);
       setSummary(result.summary);
+      setIsUploadModalOpen(false);
     } catch (error) {
       console.error('Error processing files:', error);
-      alert('Error processing files. Please check the file format and try again.');
+      setError(error instanceof Error ? error.message : 'Error processing files. Please check the file format and try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -49,6 +56,18 @@ const Brokerage: React.FC = () => {
           {isProcessing ? 'Processing...' : 'Upload Files'}
         </Button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2 text-red-700">
+              <AlertCircle className="h-4 w-4" />
+              <span>{error}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -110,8 +129,8 @@ const Brokerage: React.FC = () => {
       </div>
 
       {/* Results Table */}
-      {processedData.length > 0 && (
-        <BrokerageTable data={processedData} summary={summary!} />
+      {processedData.length > 0 && summary && (
+        <BrokerageTable data={processedData} summary={summary} />
       )}
 
       {/* Upload Modal */}
