@@ -9,6 +9,7 @@ import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import EveningIntersegment from './components/EveningIntersegment';
 import Brokerage from './components/Brokerage';
+import NseCm from './components/NseCm';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
@@ -71,8 +72,22 @@ const AppContent = () => {
             <ProtectedRoute>
               <div className="text-center py-12">
                 <h2 className="text-2xl font-bold text-slate-700">Morning BOD</h2>
-                <p className="text-slate-500 mt-2">Morning BOD section coming soon...</p>
+                <p className="text-slate-500 mt-2">Select a segment to analyze:</p>
+                <div className="mt-6 flex flex-wrap justify-center gap-4">
+                  <a href="/morning-bod/nse-cm" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">NSE CM</a>
+                  <span className="bg-gray-300 text-gray-600 px-6 py-3 rounded-lg">NSE F&O (Coming Soon)</span>
+                  <span className="bg-gray-300 text-gray-600 px-6 py-3 rounded-lg">NSE CD (Coming Soon)</span>
+                  <span className="bg-gray-300 text-gray-600 px-6 py-3 rounded-lg">MCX (Coming Soon)</span>
+                </div>
               </div>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/morning-bod/nse-cm" 
+          element={
+            <ProtectedRoute>
+              <NseCm />
             </ProtectedRoute>
           } 
         />
