@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Sidebar,
@@ -21,6 +21,7 @@ import {
   Settings,
   Shield,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 
 const menuItems = [
@@ -34,7 +35,13 @@ const menuItems = [
     title: 'Morning BOD',
     url: '/morning-bod',
     icon: Sunrise,
-    color: 'text-orange-600'
+    color: 'text-orange-600',
+    subItems: [
+      { title: 'NSE CM', url: '/morning-bod/nse-cm' },
+      { title: 'NSE F&O', url: '/morning-bod/nse-fo' },
+      { title: 'NSE CD', url: '/morning-bod/nse-cd' },
+      { title: 'MCX', url: '/morning-bod/mcx' },
+    ]
   },
   {
     title: 'Reports',
@@ -72,9 +79,18 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
   const currentPath = location.pathname;
+  const [expandedItems, setExpandedItems] = useState<string[]>(['Morning BOD']);
 
   const isActive = (path: string) => currentPath === path;
   const isCollapsed = state === 'collapsed';
+
+  const toggleExpanded = (title: string) => {
+    setExpandedItems(prev => 
+      prev.includes(title) 
+        ? prev.filter(item => item !== title)
+        : [...prev, title]
+    );
+  };
 
   return (
     <Sidebar 
@@ -105,37 +121,88 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-1">
               {menuItems.map((item) => {
                 const isItemActive = isActive(item.url);
+                const isExpanded = expandedItems.includes(item.title);
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+                
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
-                      asChild
+                      asChild={!hasSubItems}
                       tooltip={isCollapsed ? item.title : undefined}
                     >
-                      <NavLink 
-                        to={item.url} 
-                        className={`group relative transition-all duration-200 ${
-                          isItemActive 
-                            ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 font-semibold border-r-4 border-blue-600 shadow-sm" 
-                            : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900"
-                        }`}
-                      >
-                        <div className={`flex items-center transition-all duration-200 ${isCollapsed ? 'justify-center py-3 px-2' : 'space-x-3 py-3 px-3'} rounded-lg`}>
-                          <item.icon 
-                            className={`flex-shrink-0 transition-all duration-200 h-5 w-5 ${
-                              isItemActive ? 'text-blue-600' : item.color
-                            }`} 
-                          />
-                          {!isCollapsed && (
-                            <div className="flex-1 min-w-0 transition-all duration-300">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium truncate">{item.title}</span>
-                                {isItemActive && <ChevronRight className="h-4 w-4 text-blue-600 flex-shrink-0" />}
+                      {hasSubItems ? (
+                        <button
+                          onClick={() => toggleExpanded(item.title)}
+                          className={`group relative transition-all duration-200 w-full text-left ${
+                            currentPath.startsWith(item.url) 
+                              ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 font-semibold border-r-4 border-blue-600 shadow-sm" 
+                              : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900"
+                          }`}
+                        >
+                          <div className={`flex items-center transition-all duration-200 ${isCollapsed ? 'justify-center py-3 px-2' : 'space-x-3 py-3 px-3'} rounded-lg`}>
+                            <item.icon 
+                              className={`flex-shrink-0 transition-all duration-200 h-5 w-5 ${
+                                currentPath.startsWith(item.url) ? 'text-blue-600' : item.color
+                              }`} 
+                            />
+                            {!isCollapsed && (
+                              <div className="flex-1 min-w-0 transition-all duration-300">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium truncate">{item.title}</span>
+                                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      </NavLink>
+                            )}
+                          </div>
+                        </button>
+                      ) : (
+                        <NavLink 
+                          to={item.url} 
+                          className={`group relative transition-all duration-200 ${
+                            isItemActive 
+                              ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 font-semibold border-r-4 border-blue-600 shadow-sm" 
+                              : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900"
+                          }`}
+                        >
+                          <div className={`flex items-center transition-all duration-200 ${isCollapsed ? 'justify-center py-3 px-2' : 'space-x-3 py-3 px-3'} rounded-lg`}>
+                            <item.icon 
+                              className={`flex-shrink-0 transition-all duration-200 h-5 w-5 ${
+                                isItemActive ? 'text-blue-600' : item.color
+                              }`} 
+                            />
+                            {!isCollapsed && (
+                              <div className="flex-1 min-w-0 transition-all duration-300">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium truncate">{item.title}</span>
+                                  {isItemActive && <ChevronRight className="h-4 w-4 text-blue-600 flex-shrink-0" />}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </NavLink>
+                      )}
                     </SidebarMenuButton>
+                    
+                    {hasSubItems && isExpanded && !isCollapsed && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        {item.subItems!.map((subItem) => (
+                          <SidebarMenuItem key={subItem.title}>
+                            <SidebarMenuButton asChild>
+                              <NavLink
+                                to={subItem.url}
+                                className={`block py-2 px-3 text-sm rounded-md transition-colors ${
+                                  isActive(subItem.url)
+                                    ? 'bg-blue-100 text-blue-700 font-medium'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                                }`}
+                              >
+                                {subItem.title}
+                              </NavLink>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </div>
+                    )}
                   </SidebarMenuItem>
                 );
               })}

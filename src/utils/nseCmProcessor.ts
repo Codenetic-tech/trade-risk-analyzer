@@ -5,7 +5,7 @@ export interface NseCmData {
   clicode: string;
   ledgerAmount: number;
   globeAmount: number;
-  action: 'U' | 'D' | '-';
+  action: 'U' | 'D';
   difference: number;
 }
 
@@ -15,6 +15,24 @@ export interface NseCmSummary {
   netValue: number;
   proFund: number;
   finalAmount: number;
+}
+
+export interface NseCmOutputRecord {
+  currentDate: string;
+  segment: string;
+  cmCode: string;
+  tmCode: string;
+  cpCode: string;
+  clicode: string;
+  accountType: string;
+  amount: number;
+  filler1: string;
+  filler2: string;
+  filler3: string;
+  filler4: string;
+  filler5: string;
+  filler6: string;
+  action: string;
 }
 
 // Helper function to parse CSV
@@ -75,7 +93,8 @@ const parseExcel = async (file: File): Promise<any[]> => {
           // Map specific columns based on risk file format
           rowObj.Name = row[0] ? String(row[0]).trim() : '';
           rowObj.UCC = row[1] ? String(row[1]).trim() : '';
-          rowObj.NSE_CM_Balance = row[4] ? parseFloat(row[4]) : 0;
+          // Column F (index 5) contains NSE-CM Balance
+          rowObj.NSE_CM_Balance = row[5] ? parseFloat(row[5]) : 0;
           
           // Only add rows that have a valid UCC
           if (rowObj.UCC && rowObj.UCC !== '' && rowObj.UCC !== 'undefined') {
@@ -98,7 +117,7 @@ export const processNseCmFiles = async (files: {
   risk: File | null;
   nse: File | null;
   nri: File | null;
-}): Promise<{ data: NseCmData[]; summary: NseCmSummary }> => {
+}, unallocatedFund: number = 0): Promise<{ data: NseCmData[]; summary: NseCmSummary; outputRecords: NseCmOutputRecord[] }> => {
   if (!files.risk || !files.nse || !files.nri) {
     throw new Error('All files (Risk, NSE, NRI) are required');
   }
@@ -119,20 +138,26 @@ export const processNseCmFiles = async (files: {
     const nseData = parseCSV(nseText);
     console.log('NSE data:', nseData);
     
-    // Group NSE data by Clicode for CM segment
+    // Group NSE data by Clicode for CM segment and get ProFund
     const nseAllocations: { [key: string]: number } = {};
+    let proFund = 0;
     const validNseData = nseData.filter(row => row.Clicode && row.Clicode.trim());
     
     validNseData.forEach(row => {
-      const ucc = String(row.Clicode).trim();
+      const clicode = String(row.Clicode).trim();
       const segment = String(row.Segments || '').trim();
       const allocated = parseFloat(row.Allocated) || 0;
+      const accType = String(row.Acctype || '').trim();
       
       if (segment === 'CM') {
-        if (!nseAllocations[ucc]) {
-          nseAllocations[ucc] = 0;
+        if (accType === 'P') {
+          proFund = allocated; // ProFund value from Acctype P segments CM
+        } else {
+          if (!nseAllocations[clicode]) {
+            nseAllocations[clicode] = 0;
+          }
+          nseAllocations[clicode] += allocated;
         }
-        nseAllocations[ucc] += allocated;
       }
     });
 
@@ -142,8 +167,16 @@ export const processNseCmFiles = async (files: {
 
     // Process each record
     const processedData: NseCmData[] = [];
+    const outputRecords: NseCmOutputRecord[] = [];
     let upgradeTotal = 0;
     let downgradeTotal = 0;
+    
+    // Get current date in DD-MMM-YYYY format
+    const currentDate = new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
 
     filteredRiskData.forEach(riskRow => {
       const ucc = riskRow.UCC;
@@ -151,27 +184,69 @@ export const processNseCmFiles = async (files: {
       const globeAmount = nseAllocations[ucc] || 0;
       const difference = globeAmount - ledgerAmount;
       
-      let action: 'U' | 'D' | '-' = '-';
-      if (difference > 0) {
-        action = 'U';
-        upgradeTotal += difference;
-      } else if (difference < 0) {
-        action = 'D';
-        downgradeTotal += Math.abs(difference);
-      }
+      // Only include records where difference is not 0
+      if (difference !== 0) {
+        let action: 'U' | 'D' = difference > 0 ? 'U' : 'D';
+        
+        if (difference > 0) {
+          upgradeTotal += difference;
+        } else {
+          downgradeTotal += Math.abs(difference);
+        }
 
-      processedData.push({
-        clicode: ucc,
-        ledgerAmount,
-        globeAmount,
-        action,
-        difference,
-      });
+        processedData.push({
+          clicode: ucc,
+          ledgerAmount,
+          globeAmount,
+          action,
+          difference,
+        });
+
+        // Create output record
+        outputRecords.push({
+          currentDate,
+          segment: 'CM',
+          cmCode: 'M50302', // Default values as per your example
+          tmCode: '90221',
+          cpCode: '',
+          clicode: ucc,
+          accountType: 'C',
+          amount: Math.abs(difference),
+          filler1: '',
+          filler2: '',
+          filler3: '',
+          filler4: '',
+          filler5: '',
+          filler6: '',
+          action: action,
+        });
+      }
     });
 
+    // Add ProFund record to output if it exists
+    if (proFund > 0) {
+      outputRecords.unshift({
+        currentDate,
+        segment: 'CM',
+        cmCode: 'M50302',
+        tmCode: '90221',
+        cpCode: '',
+        clicode: '',
+        accountType: 'P',
+        amount: proFund,
+        filler1: '',
+        filler2: '',
+        filler3: '',
+        filler4: '',
+        filler5: '',
+        filler6: '',
+        action: 'U',
+      });
+    }
+
     const netValue = upgradeTotal - downgradeTotal;
-    const proFund = netValue * 0.1; // Assuming 10% for pro fund calculation
-    const finalAmount = netValue + proFund;
+    // Final amount calculation: profund - 8000000 + unallocated fund + netvalue
+    const finalAmount = proFund - 8000000 + unallocatedFund + netValue;
 
     const summary: NseCmSummary = {
       upgradeTotal,
@@ -181,7 +256,7 @@ export const processNseCmFiles = async (files: {
       finalAmount,
     };
 
-    return { data: processedData, summary };
+    return { data: processedData, summary, outputRecords };
 
   } catch (error) {
     console.error('Error processing NSE CM files:', error);

@@ -2,18 +2,22 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Upload, TrendingUp, TrendingDown, DollarSign, Banknote, Calculator } from 'lucide-react';
+import { Loader2, Upload, TrendingUp, TrendingDown, DollarSign, Banknote, Calculator, Download } from 'lucide-react';
 import { NseCmUploadModal } from './NseCmUploadModal';
 import { NseCmTable } from './NseCmTable';
-import { processNseCmFiles, NseCmData, NseCmSummary } from '@/utils/nseCmProcessor';
+import { processNseCmFiles, NseCmData, NseCmSummary, NseCmOutputRecord } from '@/utils/nseCmProcessor';
 
 const NseCm: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [unallocatedFund, setUnallocatedFund] = useState<number>(0);
   const [processedData, setProcessedData] = useState<{
     data: NseCmData[];
     summary: NseCmSummary;
+    outputRecords: NseCmOutputRecord[];
   } | null>(null);
 
   const handleFilesUploaded = async (files: { 
@@ -24,7 +28,7 @@ const NseCm: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      const result = await processNseCmFiles(files);
+      const result = await processNseCmFiles(files, unallocatedFund);
       setProcessedData(result);
       
       toast({
@@ -40,6 +44,40 @@ const NseCm: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const exportOutputFile = () => {
+    if (!processedData) return;
+
+    const headers = ['CURRENTDATE', 'SEGMENT', 'CMCODE', 'TMCODE', 'CPCODE', 'CLICODE', 'ACCOUNTTYPE', 'AMOUNT', 'FILLER1', 'FILLER2', 'FILLER3', 'FILLER4', 'FILLER5', 'FILLER6', 'ACTION'];
+    const csvContent = [
+      headers.join(','),
+      ...processedData.outputRecords.map(row => [
+        row.currentDate,
+        row.segment,
+        row.cmCode,
+        row.tmCode,
+        row.cpCode,
+        row.clicode,
+        row.accountType,
+        row.amount,
+        row.filler1,
+        row.filler2,
+        row.filler3,
+        row.filler4,
+        row.filler5,
+        row.filler6,
+        row.action
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'nse_cm_output.csv';
+    link.click();
+    window.URL.revokeObjectURL(url);
   };
 
   if (isProcessing) {
@@ -157,7 +195,7 @@ const NseCm: React.FC = () => {
         </div>
       )}
 
-      {/* Upload Button */}
+      {/* Upload and Input Section */}
       {!processedData && (
         <Card>
           <CardHeader>
@@ -166,14 +204,28 @@ const NseCm: React.FC = () => {
               <span>Upload Files</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-center py-8">
-            <Button 
-              onClick={() => setShowUploadModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Files for NSE CM Analysis
-            </Button>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
+              <Input
+                id="unallocated-fund"
+                type="number"
+                placeholder="Enter unallocated fund amount"
+                value={unallocatedFund || ''}
+                onChange={(e) => setUnallocatedFund(parseFloat(e.target.value) || 0)}
+                className="max-w-sm"
+              />
+            </div>
+            
+            <div className="text-center py-8">
+              <Button 
+                onClick={() => setShowUploadModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Files for NSE CM Analysis
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -183,12 +235,21 @@ const NseCm: React.FC = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-slate-800">NSE CM Analysis Results</h2>
-            <button
-              onClick={() => setProcessedData(null)}
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-            >
-              Upload New Files
-            </button>
+            <div className="flex space-x-2">
+              <Button
+                onClick={exportOutputFile}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Output File
+              </Button>
+              <button
+                onClick={() => setProcessedData(null)}
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium px-4 py-2 border border-blue-200 rounded-md hover:bg-blue-50"
+              >
+                Upload New Files
+              </button>
+            </div>
           </div>
           
           <NseCmTable data={processedData.data} />
