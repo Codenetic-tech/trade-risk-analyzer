@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Upload, TrendingUp, TrendingDown, DollarSign, Banknote, Calculator, Download } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Banknote, Calculator, Download } from 'lucide-react';
 import { NseCmUploadModal } from './NseCmUploadModal';
 import { NseCmTable } from './NseCmTable';
 import { processNseCmFiles, NseCmData, NseCmSummary, NseCmOutputRecord } from '@/utils/nseCmProcessor';
@@ -101,35 +101,21 @@ const NseCm: React.FC = () => {
         </p>
       </div>
 
-      {/* Unallocated Fund Input and Upload Button */}
+      {/* Unallocated Fund Input */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Upload className="h-5 w-5 text-blue-600" />
-            <span>Process Files</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
-            <Input
-              id="unallocated-fund"
-              type="number"
-              placeholder="Enter unallocated fund amount"
-              value={unallocatedFund || ''}
-              onChange={(e) => setUnallocatedFund(parseFloat(e.target.value) || 0)}
-              className="max-w-sm"
-            />
-          </div>
-          
-          <div className="text-center py-8">
-            <Button 
-              onClick={() => setShowUploadModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Files for NSE CM Analysis
-            </Button>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
+              <Input
+                id="unallocated-fund"
+                type="number"
+                placeholder="Enter unallocated fund amount"
+                value={unallocatedFund || ''}
+                onChange={(e) => setUnallocatedFund(parseFloat(e.target.value) || 0)}
+                className="max-w-sm"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -242,16 +228,29 @@ const NseCm: React.FC = () => {
                 <Download className="h-4 w-4 mr-2" />
                 Export Output File
               </Button>
-              <button
-                onClick={() => setProcessedData(null)}
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium px-4 py-2 border border-blue-200 rounded-md hover:bg-blue-50"
+              <Button
+                onClick={() => setShowUploadModal(true)}
+                variant="outline"
               >
                 Upload New Files
-              </button>
+              </Button>
             </div>
           </div>
           
           <NseCmTable data={processedData.data} />
+        </div>
+      )}
+
+      {/* Show upload button only when no data is processed */}
+      {!processedData && (
+        <div className="text-center py-12">
+          <Button 
+            onClick={() => setShowUploadModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
+            size="lg"
+          >
+            Upload Files for NSE CM Analysis
+          </Button>
         </div>
       )}
 

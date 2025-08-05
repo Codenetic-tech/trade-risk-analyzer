@@ -77,31 +77,73 @@ const parseExcel = async (file: File): Promise<any[]> => {
           raw: false
         });
         
-        // Find the header row (row 3, index 2 in 0-based indexing)
-        const headerRowIndex = 2;
-        if (jsonData.length <= headerRowIndex) {
-          throw new Error('Excel file does not have enough rows');
+        const processedData = [];
+        let headerRow: any[] = [];
+        let headerRowIndex = -1;
+        
+        // Find the header row that contains "UCC" and "NSE-CM Balance"
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i] as any[];
+          if (row && row.some(cell => String(cell).includes('UCC')) && 
+              row.some(cell => String(cell).includes('NSE-CM'))) {
+            headerRow = row;
+            headerRowIndex = i;
+            break;
+          }
         }
         
-        const processedData = [];
+        if (headerRowIndex === -1) {
+          throw new Error('Could not find header row with UCC and NSE-CM Balance');
+        }
+        
+        // Find column indices
+        const uccIndex = headerRow.findIndex(h => String(h).includes('UCC'));
+        const nseCmIndex = headerRow.findIndex(h => String(h).includes('NSE-CM'));
+        const nameIndex = headerRow.findIndex(h => String(h).includes('Name'));
+        
+        if (uccIndex === -1 || nseCmIndex === -1) {
+          throw new Error('Could not find required columns');
+        }
+        
+        console.log('Header row:', headerRow);
+        console.log('UCC Index:', uccIndex, 'NSE-CM Index:', nseCmIndex);
+        
+        // Process data rows
         for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
           if (!row || row.length === 0) continue;
           
-          const rowObj: any = {};
+          const ucc = row[uccIndex] ? String(row[uccIndex]).trim() : '';
+          const nseCmBalance = row[nseCmIndex] ? String(row[nseCmIndex]).trim() : '0';
+          const name = row[nameIndex] ? String(row[nameIndex]).trim() : '';
           
-          // Map specific columns based on risk file format
-          rowObj.Name = row[0] ? String(row[0]).trim() : '';
-          rowObj.UCC = row[1] ? String(row[1]).trim() : '';
-          // Column F (index 5) contains NSE-CM Balance
-          rowObj.NSE_CM_Balance = row[5] ? parseFloat(row[5]) : 0;
+          // Skip rows without UCC or with invalid UCC
+          if (!ucc || ucc === '' || ucc === 'undefined' || ucc === '#N/A') {
+            continue;
+          }
           
-          // Only add rows that have a valid UCC
-          if (rowObj.UCC && rowObj.UCC !== '' && rowObj.UCC !== 'undefined') {
-            processedData.push(rowObj);
+          // Parse NSE-CM Balance - handle negative values and "Cr" suffix
+          let balance = 0;
+          if (nseCmBalance && nseCmBalance !== '0.00') {
+            const cleanBalance = nseCmBalance.replace(/[^\d.-]/g, ''); // Remove non-numeric characters except minus and dot
+            balance = parseFloat(cleanBalance) || 0;
+            // If the balance is negative, make it positive (F * -1 equivalent)
+            balance = Math.abs(balance);
+          }
+          
+          console.log(`Processing: UCC=${ucc}, Balance=${balance}, Original=${nseCmBalance}`);
+          
+          // Only include rows with balance > 0
+          if (balance > 0) {
+            processedData.push({
+              Name: name,
+              UCC: ucc,
+              NSE_CM_Balance: balance
+            });
           }
         }
         
+        console.log('Processed risk data:', processedData);
         resolve(processedData);
       } catch (error) {
         console.error('Error parsing Excel:', error);
@@ -171,13 +213,6 @@ export const processNseCmFiles = async (files: {
     // Process Risk Excel file
     const riskData = await parseExcel(files.risk);
     console.log('Risk data:', riskData);
-    
-    // Filter valid risk data and calculate ledger amount as F * (-1), only process if > 0
-    const filteredRiskData = riskData.filter(row => {
-      const ucc = String(row.UCC || '').trim();
-      const ledgerAmount = Math.abs(row.NSE_CM_Balance || 0); // F * (-1) equivalent to Math.abs
-      return ucc && ucc !== '' && ucc !== 'undefined' && ledgerAmount > 0;
-    });
 
     // Process NSE CSV file
     const nseText = await files.nse.text();
@@ -207,6 +242,9 @@ export const processNseCmFiles = async (files: {
       }
     });
 
+    console.log('NSE Allocations:', nseAllocations);
+    console.log('ProFund:', proFund);
+
     // Process NRI Excel file to get excluded codes
     const nriExcludeCodes = await parseNriExcel(files.nri);
     console.log('NRI exclude codes:', nriExcludeCodes);
@@ -224,17 +262,20 @@ export const processNseCmFiles = async (files: {
       year: 'numeric'
     });
 
-    filteredRiskData.forEach(riskRow => {
+    riskData.forEach(riskRow => {
       const ucc = riskRow.UCC;
       
       // Skip if UCC is in NRI exclude list
       if (nriExcludeCodes.includes(ucc)) {
+        console.log(`Skipping ${ucc} - in NRI exclude list`);
         return;
       }
       
-      const ledgerAmount = Math.abs(riskRow.NSE_CM_Balance || 0);
+      const ledgerAmount = riskRow.NSE_CM_Balance || 0;
       const globeAmount = nseAllocations[ucc] || 0;
       const difference = globeAmount - ledgerAmount;
+      
+      console.log(`Processing ${ucc}: Ledger=${ledgerAmount}, Globe=${globeAmount}, Difference=${difference}`);
       
       // Only include records where difference is not 0
       if (difference !== 0) {
@@ -307,6 +348,9 @@ export const processNseCmFiles = async (files: {
       proFund,
       finalAmount,
     };
+
+    console.log('Final summary:', summary);
+    console.log('Processed data count:', processedData.length);
 
     return { data: processedData, summary, outputRecords };
 
