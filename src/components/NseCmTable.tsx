@@ -150,7 +150,7 @@ export const NseCmTable: React.FC<NseCmTableProps> = ({ data }) => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Amounts</SelectItem>
-              <SelectItem value="high">High (>10,000)</SelectItem>
+              <SelectItem value="high">High (&gt;10,000)</SelectItem>
               <SelectItem value="medium">Medium (1,000-10,000)</SelectItem>
               <SelectItem value="low">Low (≤1,000)</SelectItem>
             </SelectContent>
