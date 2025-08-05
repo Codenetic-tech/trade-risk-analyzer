@@ -26,6 +26,7 @@ const NseCm: React.FC = () => {
     nri: File | null; 
   }) => {
     setIsProcessing(true);
+    setShowUploadModal(false);
 
     try {
       const result = await processNseCmFiles(files, unallocatedFund);
@@ -99,6 +100,39 @@ const NseCm: React.FC = () => {
           Upload Risk, NSE Globe, and NRI files to analyze NSE CM allocation differences
         </p>
       </div>
+
+      {/* Unallocated Fund Input and Upload Button */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Upload className="h-5 w-5 text-blue-600" />
+            <span>Process Files</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
+            <Input
+              id="unallocated-fund"
+              type="number"
+              placeholder="Enter unallocated fund amount"
+              value={unallocatedFund || ''}
+              onChange={(e) => setUnallocatedFund(parseFloat(e.target.value) || 0)}
+              className="max-w-sm"
+            />
+          </div>
+          
+          <div className="text-center py-8">
+            <Button 
+              onClick={() => setShowUploadModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Files for NSE CM Analysis
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       {processedData && (
@@ -193,41 +227,6 @@ const NseCm: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-      )}
-
-      {/* Upload and Input Section */}
-      {!processedData && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="h-5 w-5 text-blue-600" />
-              <span>Upload Files</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
-              <Input
-                id="unallocated-fund"
-                type="number"
-                placeholder="Enter unallocated fund amount"
-                value={unallocatedFund || ''}
-                onChange={(e) => setUnallocatedFund(parseFloat(e.target.value) || 0)}
-                className="max-w-sm"
-              />
-            </div>
-            
-            <div className="text-center py-8">
-              <Button 
-                onClick={() => setShowUploadModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Files for NSE CM Analysis
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Results Section */}

@@ -113,6 +113,51 @@ const parseExcel = async (file: File): Promise<any[]> => {
   });
 };
 
+// Helper function to parse NRI Excel file
+const parseNriExcel = async (file: File): Promise<string[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1,
+          defval: '',
+          raw: false
+        });
+        
+        const nriCodes: string[] = [];
+        
+        // Find header row and NRI LIST column
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i] as any[];
+          if (row && row[0] && String(row[0]).toLowerCase().includes('nri list')) {
+            // Found NRI LIST header, collect codes from column A starting from next row
+            for (let j = i + 1; j < jsonData.length; j++) {
+              const dataRow = jsonData[j] as any[];
+              if (dataRow && dataRow[0] && String(dataRow[0]).trim()) {
+                nriCodes.push(String(dataRow[0]).trim());
+              }
+            }
+            break;
+          }
+        }
+        
+        resolve(nriCodes);
+      } catch (error) {
+        console.error('Error parsing NRI Excel:', error);
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read NRI Excel file'));
+    reader.readAsArrayBuffer(file);
+  });
+};
+
 export const processNseCmFiles = async (files: {
   risk: File | null;
   nse: File | null;
@@ -127,10 +172,11 @@ export const processNseCmFiles = async (files: {
     const riskData = await parseExcel(files.risk);
     console.log('Risk data:', riskData);
     
-    // Filter valid risk data
+    // Filter valid risk data and calculate ledger amount as F * (-1), only process if > 0
     const filteredRiskData = riskData.filter(row => {
       const ucc = String(row.UCC || '').trim();
-      return ucc && ucc !== '' && ucc !== 'undefined';
+      const ledgerAmount = Math.abs(row.NSE_CM_Balance || 0); // F * (-1) equivalent to Math.abs
+      return ucc && ucc !== '' && ucc !== 'undefined' && ledgerAmount > 0;
     });
 
     // Process NSE CSV file
@@ -141,10 +187,10 @@ export const processNseCmFiles = async (files: {
     // Group NSE data by Clicode for CM segment and get ProFund
     const nseAllocations: { [key: string]: number } = {};
     let proFund = 0;
-    const validNseData = nseData.filter(row => row.Clicode && row.Clicode.trim());
+    const validNseData = nseData.filter(row => row.Clicode || row.Acctype);
     
     validNseData.forEach(row => {
-      const clicode = String(row.Clicode).trim();
+      const clicode = String(row.Clicode || '').trim();
       const segment = String(row.Segments || '').trim();
       const allocated = parseFloat(row.Allocated) || 0;
       const accType = String(row.Acctype || '').trim();
@@ -152,7 +198,7 @@ export const processNseCmFiles = async (files: {
       if (segment === 'CM') {
         if (accType === 'P') {
           proFund = allocated; // ProFund value from Acctype P segments CM
-        } else {
+        } else if (clicode) {
           if (!nseAllocations[clicode]) {
             nseAllocations[clicode] = 0;
           }
@@ -161,9 +207,9 @@ export const processNseCmFiles = async (files: {
       }
     });
 
-    // Process NRI Excel file
-    const nriData = await parseExcel(files.nri);
-    console.log('NRI data:', nriData);
+    // Process NRI Excel file to get excluded codes
+    const nriExcludeCodes = await parseNriExcel(files.nri);
+    console.log('NRI exclude codes:', nriExcludeCodes);
 
     // Process each record
     const processedData: NseCmData[] = [];
@@ -180,6 +226,12 @@ export const processNseCmFiles = async (files: {
 
     filteredRiskData.forEach(riskRow => {
       const ucc = riskRow.UCC;
+      
+      // Skip if UCC is in NRI exclude list
+      if (nriExcludeCodes.includes(ucc)) {
+        return;
+      }
+      
       const ledgerAmount = Math.abs(riskRow.NSE_CM_Balance || 0);
       const globeAmount = nseAllocations[ucc] || 0;
       const difference = globeAmount - ledgerAmount;
@@ -206,7 +258,7 @@ export const processNseCmFiles = async (files: {
         outputRecords.push({
           currentDate,
           segment: 'CM',
-          cmCode: 'M50302', // Default values as per your example
+          cmCode: 'M50302',
           tmCode: '90221',
           cpCode: '',
           clicode: ucc,
