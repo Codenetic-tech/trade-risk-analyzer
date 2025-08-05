@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -10,6 +11,8 @@ import Dashboard from './components/Dashboard';
 import EveningIntersegment from './components/EveningIntersegment';
 import Brokerage from './components/Brokerage';
 import NseCm from './components/NseCm';
+import NseFo from './components/NseFo';
+import NseCd from './components/NseCd';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
@@ -62,7 +65,10 @@ const AppContent = () => {
           path="/allocation-check" 
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-slate-700">Allocation Check</h2>
+                <p className="text-slate-500 mt-2">Allocation check section coming soon...</p>
+              </div>
             </ProtectedRoute>
           } 
         />
@@ -95,10 +101,7 @@ const AppContent = () => {
           path="/morning-bod/nse-fo" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">NSE F&O</h2>
-                <p className="text-slate-500 mt-2">NSE F&O analysis coming soon...</p>
-              </div>
+              <NseFo />
             </ProtectedRoute>
           } 
         />
@@ -106,10 +109,7 @@ const AppContent = () => {
           path="/morning-bod/nse-cd" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">NSE CD</h2>
-                <p className="text-slate-500 mt-2">NSE CD analysis coming soon...</p>
-              </div>
+              <NseCd />
             </ProtectedRoute>
           } 
         />

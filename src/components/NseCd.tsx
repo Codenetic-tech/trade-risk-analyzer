@@ -11,7 +11,7 @@ import { NseCmTable } from './NseCmTable';
 import { processNseCmFiles, NseCmData, NseCmSummary, NseCmOutputRecord } from '@/utils/nseCmProcessor';
 import ModernLoading from './ModernLoading';
 
-const NseCm: React.FC = () => {
+const NseCd: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [unallocatedFund, setUnallocatedFund] = useState<number>(0);
@@ -30,17 +30,18 @@ const NseCm: React.FC = () => {
     setShowUploadModal(false);
 
     try {
+      // For now using same processor, will modify later for CD specific logic
       const result = await processNseCmFiles(files, unallocatedFund);
       setProcessedData(result);
       
       toast({
         title: "Processing Complete",
-        description: `Processed ${result.data.length} records successfully`,
+        description: `Processed ${result.data.length} CD records successfully`,
       });
     } catch (error) {
       toast({
         title: "Processing Error",
-        description: "Failed to process files. Please check file formats and try again.",
+        description: "Failed to process CD files. Please check file formats and try again.",
         variant: "destructive",
       });
     } finally {
@@ -56,7 +57,7 @@ const NseCm: React.FC = () => {
       headers.join(','),
       ...processedData.outputRecords.map(row => [
         row.currentDate,
-        row.segment,
+        'CD', // Changed segment to CD
         row.cmCode,
         row.tmCode,
         row.cpCode,
@@ -77,7 +78,7 @@ const NseCm: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'nse_cm_output.csv';
+    link.download = 'nse_cd_output.csv';
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -85,8 +86,8 @@ const NseCm: React.FC = () => {
   if (isProcessing) {
     return (
       <ModernLoading 
-        message="Processing NSE CM Files"
-        subMessage="Analyzing risk data, globe allocations, and NRI exclusions. This may take a few moments."
+        message="Processing NSE CD Files"
+        subMessage="Analyzing currency derivatives data, risk allocations, and NRI exclusions. This may take a few moments."
       />
     );
   }
@@ -95,9 +96,9 @@ const NseCm: React.FC = () => {
     <div className="space-y-8">
       {/* Header */}
       <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-bold text-slate-800">NSE CM - Morning BOD</h1>
+        <h1 className="text-3xl font-bold text-slate-800">NSE CD - Morning BOD</h1>
         <p className="text-slate-600 mt-2">
-          Upload Risk, NSE Globe, and NRI files to analyze NSE CM allocation differences
+          Upload Risk, NSE Globe, and NRI files to analyze NSE CD allocation differences
         </p>
       </div>
 
@@ -235,7 +236,7 @@ const NseCm: React.FC = () => {
       {/* Results Section */}
       {processedData && (
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-slate-800">NSE CM Analysis Results</h2>
+          <h2 className="text-xl font-semibold text-slate-800">NSE CD Analysis Results</h2>
           <NseCmTable data={processedData.data} />
         </div>
       )}
@@ -248,7 +249,7 @@ const NseCm: React.FC = () => {
             className="bg-blue-600 hover:bg-blue-700 px-8 py-3"
             size="lg"
           >
-            Upload Files for NSE CM Analysis
+            Upload Files for NSE CD Analysis
           </Button>
         </div>
       )}
@@ -263,4 +264,4 @@ const NseCm: React.FC = () => {
   );
 };
 
-export default NseCm;
+export default NseCd;
