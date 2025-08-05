@@ -716,7 +716,7 @@ export const exportClientWiseBrokerage = (data: BrokerageData[], type: 'ALL' | '
       row.mcxOpt
     ].join('|');
     
-    content += sStr + '\n';
+    content += sStr + '|' + '\n';
   });
 
   const blob = new Blob([content], { type: 'text/plain' });

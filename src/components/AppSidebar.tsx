@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
@@ -99,7 +98,7 @@ export function AppSidebar() {
     >
       <SidebarContent className="bg-transparent">
         {/* Logo Section */}
-        <div className={`transition-all duration-300 ${isCollapsed ? 'p-3' : 'p-6'} border-b border-slate-200`}>
+        <div className={`transition-all duration-300 ${isCollapsed ? 'p-3' : 'p-3'} border-b border-slate-200`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="relative">
               <div className={`bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-xl shadow-lg transition-all duration-300 ${isCollapsed ? 'p-2' : 'p-2.5'}`}>
@@ -110,13 +109,12 @@ export function AppSidebar() {
             {!isCollapsed && (
               <div className="transition-all duration-300">
                 <h2 className="font-bold text-xl text-slate-800 tracking-tight">RMS Pro</h2>
-                <p className="text-xs text-slate-500 font-medium">Risk Management Suite</p>
               </div>
             )}
           </div>
         </div>
 
-        <SidebarGroup className={`transition-all duration-300 ${isCollapsed ? 'px-2 py-3' : 'px-4 py-4'}`}>
+        <SidebarGroup className={`transition-all duration-300 ${isCollapsed ? 'px-1 py-3' : 'px-4 py-4'}`}>
           <SidebarGroupContent className="mt-2">
             <SidebarMenu className="space-y-1">
               {menuItems.map((item) => {
@@ -139,7 +137,9 @@ export function AppSidebar() {
                               : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900"
                           }`}
                         >
-                          <div className={`flex items-center transition-all duration-200 ${isCollapsed ? 'justify-center py-3 px-2' : 'space-x-3 py-3 px-3'} rounded-lg`}>
+                          <div className={`flex items-center transition-all duration-200 ${
+                            isCollapsed ? 'h-12 w-12 justify-center' : 'space-x-3 py-3 px-3'
+                          } rounded-lg`}>
                             <item.icon 
                               className={`flex-shrink-0 transition-all duration-200 h-5 w-5 ${
                                 currentPath.startsWith(item.url) ? 'text-blue-600' : item.color
@@ -164,7 +164,9 @@ export function AppSidebar() {
                               : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 text-slate-700 hover:text-slate-900"
                           }`}
                         >
-                          <div className={`flex items-center transition-all duration-200 ${isCollapsed ? 'justify-center py-3 px-2' : 'space-x-3 py-3 px-3'} rounded-lg`}>
+                          <div className={`flex items-center transition-all duration-200 ${
+                            isCollapsed ? 'h-12 w-12 justify-center' : 'space-x-3 py-3 px-3'
+                          } rounded-lg`}>
                             <item.icon 
                               className={`flex-shrink-0 transition-all duration-200 h-5 w-5 ${
                                 isItemActive ? 'text-blue-600' : item.color

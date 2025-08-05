@@ -204,17 +204,17 @@ const EveningIntersegment: React.FC = () => {
         let kambalaNseAmount, kambalaMcxAmount;
         
         if (unclearedCash !== 0) {
-          // If uncleared cash is not 0, use new calculation
-          const newMarginUsed = marginUsed + (marginUsed * 0.01); // margin used + 1% of margin used
+          // ✅ If margin used is 0, treat 1% of margin as ₹100
+          const onePercent = marginUsed === 0 ? 100 : marginUsed * 0.01;
+          const newMarginUsed = marginUsed + onePercent;
+
           const calculatedAmount = newMarginUsed - (cash + payin);
-          
-          // Fixed: Make sure the sign is correct - positive value for NSE (not negative)
-          kambalaNseAmount = Math.round(calculatedAmount); // Positive for NSE, rounded
-          kambalaMcxAmount = Math.round(calculatedAmount);   // Positive for MCX, rounded
+
+          kambalaNseAmount = Math.round(calculatedAmount);      // NSE positive
+          kambalaMcxAmount = -Math.round(calculatedAmount);     // MCX opposite
         } else {
-          // If uncleared cash is 0, use original calculation
-          kambalaNseAmount = Math.round(-margin99); // Negative 99% margin for NSE, rounded
-          kambalaMcxAmount = Math.round(margin99);  // Positive 99% margin for MCX, rounded
+          kambalaNseAmount = Math.round(-margin99);
+          kambalaMcxAmount = Math.round(margin99);
         }
 
         return {
@@ -269,12 +269,13 @@ const EveningIntersegment: React.FC = () => {
       const marginUsed = row.MarginUsed;
       const collateralTotal = row.CollateralTotal;
       
+
       let nseAmount;
       if ((cash + payin) < marginUsed) {
-        nseAmount = (collateralTotal - marginUsed) * -1;
+        nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
       } else {
         // Updated calculation: 1% margin + margin used
-        nseAmount = row.margin1 + marginUsed;
+        nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
       }
       
       return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(nseAmount)},,,,,,,D`;
