@@ -1,4 +1,3 @@
-
 import * as XLSX from 'xlsx';
 
 export interface NseCmData {
@@ -84,8 +83,7 @@ const parseExcel = async (file: File): Promise<any[]> => {
         // Find the header row that contains "UCC" and "NSE-CM Balance"
         for (let i = 0; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
-          if (row && row.some(cell => String(cell).includes('UCC')) && 
-              row.some(cell => String(cell).includes('NSE-CM'))) {
+          if (row && row.some(cell => String(cell).includes('UCC'))) {
             headerRow = row;
             headerRowIndex = i;
             break;
@@ -93,7 +91,7 @@ const parseExcel = async (file: File): Promise<any[]> => {
         }
         
         if (headerRowIndex === -1) {
-          throw new Error('Could not find header row with UCC and NSE-CM Balance');
+          throw new Error('Could not find header row with UCC');
         }
         
         // Find column indices
@@ -126,14 +124,14 @@ const parseExcel = async (file: File): Promise<any[]> => {
           let balance = 0;
           if (nseCmBalance && nseCmBalance !== '0.00') {
             const cleanBalance = nseCmBalance.replace(/[^\d.-]/g, ''); // Remove non-numeric characters except minus and dot
-            balance = parseFloat(cleanBalance) || 0;
-            // If the balance is negative, make it positive (F * -1 equivalent)
-            balance = Math.abs(balance);
+            const rawValue = parseFloat(cleanBalance) || 0;
+            // Multiply by -1 as per requirement
+            balance = rawValue * -1;
           }
           
           console.log(`Processing: UCC=${ucc}, Balance=${balance}, Original=${nseCmBalance}`);
           
-          // Only include rows with balance > 0
+          // Only include rows with balance > 0 after multiplication
           if (balance > 0) {
             processedData.push({
               Name: name,
@@ -255,13 +253,14 @@ export const processNseCmFiles = async (files: {
     let upgradeTotal = 0;
     let downgradeTotal = 0;
     
-    // Get current date in DD-MMM-YYYY format
-    const currentDate = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    // Get current date in DD-MMM-YYYY format with hyphens (05-Aug-2025)
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    const currentDate = `${day}-${month}-${year}`;
 
+    // 1. Process risk data records
     riskData.forEach(riskRow => {
       const ucc = riskRow.UCC;
       
@@ -276,13 +275,15 @@ export const processNseCmFiles = async (files: {
       const difference = globeAmount - ledgerAmount;
       
       console.log(`Processing ${ucc}: Ledger=${ledgerAmount}, Globe=${globeAmount}, Difference=${difference}`);
+
+      const amountsMatch = Math.abs(ledgerAmount - globeAmount) < 0.01;
       
       // Only include records where difference is not 0
-      if (difference !== 0) {
-        let action: 'U' | 'D' = difference > 0 ? 'U' : 'D';
+      if (!(ledgerAmount === 0 && globeAmount === 0) && !amountsMatch) {
+        let action: 'U' | 'D' = ledgerAmount > globeAmount ? 'U' : 'D';
         
-        if (difference > 0) {
-          upgradeTotal += difference;
+        if (action === 'U') {
+          upgradeTotal += Math.abs(difference);
         } else {
           downgradeTotal += Math.abs(difference);
         }
@@ -295,50 +296,56 @@ export const processNseCmFiles = async (files: {
           difference,
         });
 
-        // Create output record
+            outputRecords.push({
+              currentDate,
+              segment: 'CM',
+              cmCode: 'M50302',
+              tmCode: '90221',
+              cpCode: '',
+              clicode: ucc,
+              accountType: 'C',
+              amount: ledgerAmount,
+              filler1: '',
+              filler2: '',
+              filler3: '',
+              filler4: '',
+              filler5: '',
+              filler6: '',
+              action: action,
+            });
+      }
+    });
+
+    // 2. Add records for globe file clients missing in risk file
+    const processedCliCodes = new Set(riskData.map(row => row.UCC));
+    for (const clicode in nseAllocations) {
+      if (
+        !processedCliCodes.has(clicode) &&
+        !nriExcludeCodes.includes(clicode)
+      ) {
+        console.log(`Adding missing client ${clicode} from globe file`);
         outputRecords.push({
           currentDate,
           segment: 'CM',
           cmCode: 'M50302',
           tmCode: '90221',
           cpCode: '',
-          clicode: ucc,
+          clicode: clicode,
           accountType: 'C',
-          amount: Math.abs(difference),
+          amount: 0,
           filler1: '',
           filler2: '',
           filler3: '',
           filler4: '',
           filler5: '',
           filler6: '',
-          action: action,
+          action: 'D', // Always downgrade for missing clients
         });
       }
-    });
-
-    // Add ProFund record to output if it exists
-    if (proFund > 0) {
-      outputRecords.unshift({
-        currentDate,
-        segment: 'CM',
-        cmCode: 'M50302',
-        tmCode: '90221',
-        cpCode: '',
-        clicode: '',
-        accountType: 'P',
-        amount: proFund,
-        filler1: '',
-        filler2: '',
-        filler3: '',
-        filler4: '',
-        filler5: '',
-        filler6: '',
-        action: 'U',
-      });
     }
 
+    // Calculate summary values
     const netValue = upgradeTotal - downgradeTotal;
-    // Final amount calculation: profund - 8000000 + unallocated fund + netvalue
     const finalAmount = proFund - 8000000 + unallocatedFund + netValue;
 
     const summary: NseCmSummary = {
@@ -348,6 +355,25 @@ export const processNseCmFiles = async (files: {
       proFund,
       finalAmount,
     };
+
+    // 3. Add ProFund record using finalAmount
+    outputRecords.unshift({
+      currentDate,
+      segment: 'CM',
+      cmCode: 'M50302',
+      tmCode: '90221',
+      cpCode: '',
+      clicode: '',
+      accountType: 'P',
+      amount: finalAmount, // Use calculated finalAmount
+      filler1: '',
+      filler2: '',
+      filler3: '',
+      filler4: '',
+      filler5: '',
+      filler6: '',
+      action: 'U',
+    });
 
     console.log('Final summary:', summary);
     console.log('Processed data count:', processedData.length);

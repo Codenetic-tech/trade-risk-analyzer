@@ -108,7 +108,7 @@ export function AppSidebar() {
             </div>
             {!isCollapsed && (
               <div className="transition-all duration-300">
-                <h2 className="font-bold text-xl text-slate-800 tracking-tight">RMS Pro</h2>
+                <h2 className="font-bold text-xl text-slate-800 tracking-tight">GoPocket</h2>
               </div>
             )}
           </div>
