@@ -64,7 +64,7 @@ const NseCm: React.FC = () => {
       const netValue = processedData.summary.upgradeTotal - processedData.summary.downgradeTotal;
       const finalProFund = processedData.summary.proFund - 8000000;
       const unallocatedFundAmount = tempUnallocatedFund * 100000; // Convert lacs to actual amount
-      const newFinalAmount = parseFloat((finalProFund - netValue + unallocatedFundAmount).toFixed(2));
+      const newFinalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
       
       const updatedSummary = {
         ...processedData.summary,

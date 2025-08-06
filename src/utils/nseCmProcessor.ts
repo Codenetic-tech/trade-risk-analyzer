@@ -125,8 +125,11 @@ const parseExcel = async (file: File): Promise<any[]> => {
           if (nseCmBalance && nseCmBalance !== '0.00') {
             const cleanBalance = nseCmBalance.replace(/[^\d.-]/g, ''); // Remove non-numeric characters except minus and dot
             const rawValue = parseFloat(cleanBalance) || 0;
-            // Use absolute value as per requirement
-            balance = Math.abs(rawValue);
+            // CHANGES START HERE: Multiply by -1 and only take positive values
+            const adjustedValue = rawValue * -1;
+            if (adjustedValue > 0) {
+              balance = adjustedValue;
+            }
           }
           
           console.log(`Processing: UCC=${ucc}, Balance=${balance}, Original=${nseCmBalance}`);
@@ -372,7 +375,7 @@ export const processNseCmFiles = async (files: {
     const netValue = upgradeTotal - downgradeTotal;
     const finalProFund = proFund - 8000000;
     const unallocatedFundAmount = unallocatedFund * 100000; // Convert lacs to actual amount
-    const finalAmount = parseFloat((finalProFund - netValue + unallocatedFundAmount).toFixed(2));
+    const finalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
 
     const summary: NseCmSummary = {
       upgradeTotal,
