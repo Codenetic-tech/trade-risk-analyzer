@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,18 +60,26 @@ const NseCm: React.FC = () => {
         description: "Updating calculations with new unallocated fund amount...",
       });
       
-      // Update the final amount in summary and output records
-      const newNetValue = processedData.summary.upgradeTotal - processedData.summary.downgradeTotal;
-      const newFinalAmount = processedData.summary.proFund - 8000000 + tempUnallocatedFund + newNetValue;
+      // Update the final amount in summary and output records using new formula
+      const netValue = processedData.summary.upgradeTotal - processedData.summary.downgradeTotal;
+      const finalProFund = processedData.summary.proFund - 8000000;
+      const unallocatedFundAmount = tempUnallocatedFund * 100000; // Convert lacs to actual amount
+      const newFinalAmount = parseFloat((finalProFund - netValue + unallocatedFundAmount).toFixed(2));
       
       const updatedSummary = {
         ...processedData.summary,
         finalAmount: newFinalAmount
       };
       
+      const proFundAction: 'U' | 'D' = processedData.summary.proFund < newFinalAmount ? 'U' : 'D';
+      
       const updatedOutputRecords = processedData.outputRecords.map((record, index) => {
         if (index === 0 && record.accountType === 'P') {
-          return { ...record, amount: newFinalAmount };
+          return { 
+            ...record, 
+            amount: newFinalAmount,
+            action: proFundAction
+          };
         }
         return record;
       });
@@ -155,11 +162,7 @@ const NseCm: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-700">
-                {processedData.summary.upgradeTotal.toLocaleString('en-IN', {
-                  style: 'currency',
-                  currency: 'INR',
-                  minimumFractionDigits: 2
-                })}
+                ₹{(processedData.summary.upgradeTotal / 100000).toFixed(2)} L
               </div>
             </CardContent>
           </Card>
@@ -173,11 +176,7 @@ const NseCm: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-700">
-                {processedData.summary.downgradeTotal.toLocaleString('en-IN', {
-                  style: 'currency',
-                  currency: 'INR',
-                  minimumFractionDigits: 2
-                })}
+                ₹{(processedData.summary.downgradeTotal / 100000).toFixed(2)} L
               </div>
             </CardContent>
           </Card>
@@ -191,11 +190,7 @@ const NseCm: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">
-                {processedData.summary.netValue.toLocaleString('en-IN', {
-                  style: 'currency',
-                  currency: 'INR',
-                  minimumFractionDigits: 2
-                })}
+                ₹{(processedData.summary.netValue / 100000).toFixed(2)} L
               </div>
             </CardContent>
           </Card>
@@ -209,11 +204,7 @@ const NseCm: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-700">
-                {processedData.summary.proFund.toLocaleString('en-IN', {
-                  style: 'currency',
-                  currency: 'INR',
-                  minimumFractionDigits: 2
-                })}
+                ₹{(processedData.summary.proFund / 100000).toFixed(2)} L
               </div>
             </CardContent>
           </Card>
@@ -227,11 +218,7 @@ const NseCm: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-700">
-                {processedData.summary.finalAmount.toLocaleString('en-IN', {
-                  style: 'currency',
-                  currency: 'INR',
-                  minimumFractionDigits: 2
-                })}
+                ₹{(processedData.summary.finalAmount / 100000).toFixed(2)} L
               </div>
             </CardContent>
           </Card>
@@ -244,17 +231,18 @@ const NseCm: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between space-y-4 lg:space-y-0">
               <div className="space-y-2">
-                <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
+                <Label htmlFor="unallocated-fund">Unallocated Fund (in Lacs)</Label>
                 <div className="flex items-center space-x-2">
                   {isEditingUnallocated ? (
                     <>
                       <Input
                         id="temp-unallocated-fund"
                         type="number"
-                        placeholder="Enter unallocated fund amount"
+                        placeholder="Enter amount in lacs"
                         value={tempUnallocatedFund || ''}
                         onChange={(e) => setTempUnallocatedFund(parseFloat(e.target.value) || 0)}
                         className="max-w-sm"
+                        step="0.01"
                       />
                       <Button
                         onClick={handleSetUnallocatedFund}
@@ -276,8 +264,8 @@ const NseCm: React.FC = () => {
                     <>
                       <Input
                         id="unallocated-fund"
-                        type="number"
-                        value={unallocatedFund || ''}
+                        type="text"
+                        value={`₹${unallocatedFund.toFixed(2)} L`}
                         readOnly
                         className="max-w-sm bg-gray-50"
                       />

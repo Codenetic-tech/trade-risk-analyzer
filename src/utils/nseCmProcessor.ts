@@ -368,9 +368,11 @@ export const processNseCmFiles = async (files: {
       }
     }
 
-    // Calculate summary values
+    // Calculate summary values using new formula
     const netValue = upgradeTotal - downgradeTotal;
-    const finalAmount = proFund - 8000000 + unallocatedFund + netValue;
+    const finalProFund = proFund - 8000000;
+    const unallocatedFundAmount = unallocatedFund * 100000; // Convert lacs to actual amount
+    const finalAmount = parseFloat((finalProFund - netValue + unallocatedFundAmount).toFixed(2));
 
     const summary: NseCmSummary = {
       upgradeTotal,
@@ -380,7 +382,9 @@ export const processNseCmFiles = async (files: {
       finalAmount,
     };
 
-    // 3. Add ProFund record using finalAmount at the beginning
+    // 3. Add ProFund record using finalAmount at the beginning with correct action logic
+    const proFundAction: 'U' | 'D' = proFund < finalAmount ? 'U' : 'D';
+    
     outputRecords.unshift({
       currentDate,
       segment: 'CM',
@@ -396,7 +400,7 @@ export const processNseCmFiles = async (files: {
       filler4: '',
       filler5: '',
       filler6: '',
-      action: 'U',
+      action: proFundAction,
     });
 
     console.log('Final summary:', summary);
