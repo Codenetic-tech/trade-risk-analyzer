@@ -125,13 +125,13 @@ const parseExcel = async (file: File): Promise<any[]> => {
           if (nseCmBalance && nseCmBalance !== '0.00') {
             const cleanBalance = nseCmBalance.replace(/[^\d.-]/g, ''); // Remove non-numeric characters except minus and dot
             const rawValue = parseFloat(cleanBalance) || 0;
-            // Multiply by -1 as per requirement
-            balance = rawValue * -1;
+            // Use absolute value as per requirement
+            balance = Math.abs(rawValue);
           }
           
           console.log(`Processing: UCC=${ucc}, Balance=${balance}, Original=${nseCmBalance}`);
           
-          // Only include rows with balance > 0 after multiplication
+          // Only include rows with balance > 0
           if (balance > 0) {
             processedData.push({
               Name: name,
@@ -276,11 +276,12 @@ export const processNseCmFiles = async (files: {
       
       console.log(`Processing ${ucc}: Ledger=${ledgerAmount}, Globe=${globeAmount}, Difference=${difference}`);
 
-      const amountsMatch = Math.abs(ledgerAmount - globeAmount) < 0.01;
+      // Only include records where there's a meaningful difference OR where globe amount exists but ledger doesn't
+      const hasSignificantDifference = Math.abs(difference) > 0.01;
+      const hasGlobeButNoLedger = globeAmount > 0 && ledgerAmount === 0;
       
-      // Only include records where difference is not 0
-      if (!(ledgerAmount === 0 && globeAmount === 0) && !amountsMatch) {
-        let action: 'U' | 'D' = ledgerAmount > globeAmount ? 'U' : 'D';
+      if (hasSignificantDifference || hasGlobeButNoLedger) {
+        let action: 'U' | 'D' = difference > 0 ? 'U' : 'D';
         
         if (action === 'U') {
           upgradeTotal += Math.abs(difference);
@@ -296,34 +297,47 @@ export const processNseCmFiles = async (files: {
           difference,
         });
 
-            outputRecords.push({
-              currentDate,
-              segment: 'CM',
-              cmCode: 'M50302',
-              tmCode: '90221',
-              cpCode: '',
-              clicode: ucc,
-              accountType: 'C',
-              amount: ledgerAmount,
-              filler1: '',
-              filler2: '',
-              filler3: '',
-              filler4: '',
-              filler5: '',
-              filler6: '',
-              action: action,
-            });
+        outputRecords.push({
+          currentDate,
+          segment: 'CM',
+          cmCode: 'M50302',
+          tmCode: '90221',
+          cpCode: '',
+          clicode: ucc,
+          accountType: 'C',
+          amount: ledgerAmount,
+          filler1: '',
+          filler2: '',
+          filler3: '',
+          filler4: '',
+          filler5: '',
+          filler6: '',
+          action: action,
+        });
       }
     });
 
-    // 2. Add records for globe file clients missing in risk file
+    // 2. Add records for globe file clients missing in risk file (but only if they have allocations > 0)
     const processedCliCodes = new Set(riskData.map(row => row.UCC));
     for (const clicode in nseAllocations) {
+      const allocation = nseAllocations[clicode];
       if (
         !processedCliCodes.has(clicode) &&
-        !nriExcludeCodes.includes(clicode)
+        !nriExcludeCodes.includes(clicode) &&
+        allocation > 0 // Only include if there's actual allocation
       ) {
-        console.log(`Adding missing client ${clicode} from globe file`);
+        console.log(`Adding missing client ${clicode} from globe file with allocation ${allocation}`);
+        
+        processedData.push({
+          clicode,
+          ledgerAmount: 0,
+          globeAmount: allocation,
+          action: 'D',
+          difference: -allocation,
+        });
+        
+        downgradeTotal += allocation;
+        
         outputRecords.push({
           currentDate,
           segment: 'CM',
@@ -339,7 +353,7 @@ export const processNseCmFiles = async (files: {
           filler4: '',
           filler5: '',
           filler6: '',
-          action: 'D', // Always downgrade for missing clients
+          action: 'D',
         });
       }
     }
@@ -356,7 +370,7 @@ export const processNseCmFiles = async (files: {
       finalAmount,
     };
 
-    // 3. Add ProFund record using finalAmount
+    // 3. Add ProFund record using finalAmount at the beginning
     outputRecords.unshift({
       currentDate,
       segment: 'CM',
@@ -365,7 +379,7 @@ export const processNseCmFiles = async (files: {
       cpCode: '',
       clicode: '',
       accountType: 'P',
-      amount: finalAmount, // Use calculated finalAmount
+      amount: finalAmount,
       filler1: '',
       filler2: '',
       filler3: '',

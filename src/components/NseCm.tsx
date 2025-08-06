@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { TrendingUp, TrendingDown, DollarSign, Banknote, Calculator, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Banknote, Calculator, Download, Settings, Edit } from 'lucide-react';
 import { NseCmUploadModal } from './NseCmUploadModal';
 import { NseCmTable } from './NseCmTable';
 import { processNseCmFiles, NseCmData, NseCmSummary, NseCmOutputRecord } from '@/utils/nseCmProcessor';
@@ -15,6 +15,8 @@ const NseCm: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [unallocatedFund, setUnallocatedFund] = useState<number>(0);
+  const [tempUnallocatedFund, setTempUnallocatedFund] = useState<number>(0);
+  const [isEditingUnallocated, setIsEditingUnallocated] = useState(false);
   const [processedData, setProcessedData] = useState<{
     data: NseCmData[];
     summary: NseCmSummary;
@@ -48,11 +50,51 @@ const NseCm: React.FC = () => {
     }
   };
 
+  const handleSetUnallocatedFund = async () => {
+    setUnallocatedFund(tempUnallocatedFund);
+    setIsEditingUnallocated(false);
+    
+    // Reprocess data with new unallocated fund if we have processed data
+    if (processedData) {
+      toast({
+        title: "Recalculating",
+        description: "Updating calculations with new unallocated fund amount...",
+      });
+      
+      // Update the final amount in summary and output records
+      const newNetValue = processedData.summary.upgradeTotal - processedData.summary.downgradeTotal;
+      const newFinalAmount = processedData.summary.proFund - 8000000 + tempUnallocatedFund + newNetValue;
+      
+      const updatedSummary = {
+        ...processedData.summary,
+        finalAmount: newFinalAmount
+      };
+      
+      const updatedOutputRecords = processedData.outputRecords.map((record, index) => {
+        if (index === 0 && record.accountType === 'P') {
+          return { ...record, amount: newFinalAmount };
+        }
+        return record;
+      });
+      
+      setProcessedData({
+        ...processedData,
+        summary: updatedSummary,
+        outputRecords: updatedOutputRecords
+      });
+    }
+  };
+
+  const handleEditUnallocatedFund = () => {
+    setTempUnallocatedFund(unallocatedFund);
+    setIsEditingUnallocated(true);
+  };
+
   const exportOutputFile = () => {
     if (!processedData) return;
 
     const headers = ['CURRENTDATE', 'SEGMENT', 'CMCODE', 'TMCODE', 'CPCODE', 'CLICODE', 'ACCOUNTTYPE', 'AMOUNT', 'FILLER1', 'FILLER2', 'FILLER3', 'FILLER4', 'FILLER5', 'FILLER6', 'ACTION'];
-    const csvContent = [
+    const textContent = [
       headers.join(','),
       ...processedData.outputRecords.map(row => [
         row.currentDate,
@@ -73,11 +115,11 @@ const NseCm: React.FC = () => {
       ].join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([textContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'nse_cm_output.csv';
+    link.download = 'nse_cm_output.txt';
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -196,23 +238,62 @@ const NseCm: React.FC = () => {
         </div>
       )}
 
-      {/* Unallocated Fund Input and Export Section */}
+      {/* Unallocated Fund and Export Section */}
       {processedData && (
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between space-y-4 lg:space-y-0">
               <div className="space-y-2">
                 <Label htmlFor="unallocated-fund">Unallocated Fund</Label>
-                <Input
-                  id="unallocated-fund"
-                  type="number"
-                  placeholder="Enter unallocated fund amount"
-                  value={unallocatedFund || ''}
-                  onChange={(e) => setUnallocatedFund(parseFloat(e.target.value) || 0)}
-                  className="max-w-sm"
-                />
+                <div className="flex items-center space-x-2">
+                  {isEditingUnallocated ? (
+                    <>
+                      <Input
+                        id="temp-unallocated-fund"
+                        type="number"
+                        placeholder="Enter unallocated fund amount"
+                        value={tempUnallocatedFund || ''}
+                        onChange={(e) => setTempUnallocatedFund(parseFloat(e.target.value) || 0)}
+                        className="max-w-sm"
+                      />
+                      <Button
+                        onClick={handleSetUnallocatedFund}
+                        className="bg-green-600 hover:bg-green-700"
+                        size="sm"
+                      >
+                        <Settings className="h-4 w-4 mr-1" />
+                        Set
+                      </Button>
+                      <Button
+                        onClick={() => setIsEditingUnallocated(false)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        id="unallocated-fund"
+                        type="number"
+                        value={unallocatedFund || ''}
+                        readOnly
+                        className="max-w-sm bg-gray-50"
+                      />
+                      <Button
+                        onClick={handleEditUnallocatedFund}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                 <Button
                   onClick={exportOutputFile}
                   className="bg-green-600 hover:bg-green-700"
