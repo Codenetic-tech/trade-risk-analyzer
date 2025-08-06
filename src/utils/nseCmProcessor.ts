@@ -272,49 +272,56 @@ export const processNseCmFiles = async (files: {
       
       const ledgerAmount = riskRow.NSE_CM_Balance || 0;
       const globeAmount = nseAllocations[ucc] || 0;
-      const difference = globeAmount - ledgerAmount;
+      const difference = ledgerAmount - globeAmount; // Changed: ledger - globe for correct difference calculation
       
       console.log(`Processing ${ucc}: Ledger=${ledgerAmount}, Globe=${globeAmount}, Difference=${difference}`);
 
-      // Only include records where there's a meaningful difference OR where globe amount exists but ledger doesn't
-      const hasSignificantDifference = Math.abs(difference) > 0.01;
-      const hasGlobeButNoLedger = globeAmount > 0 && ledgerAmount === 0;
-      
-      if (hasSignificantDifference || hasGlobeButNoLedger) {
-        let action: 'U' | 'D' = difference > 0 ? 'U' : 'D';
-        
-        if (action === 'U') {
-          upgradeTotal += Math.abs(difference);
-        } else {
-          downgradeTotal += Math.abs(difference);
-        }
-
-        processedData.push({
-          clicode: ucc,
-          ledgerAmount,
-          globeAmount,
-          action,
-          difference,
-        });
-
-        outputRecords.push({
-          currentDate,
-          segment: 'CM',
-          cmCode: 'M50302',
-          tmCode: '90221',
-          cpCode: '',
-          clicode: ucc,
-          accountType: 'C',
-          amount: ledgerAmount,
-          filler1: '',
-          filler2: '',
-          filler3: '',
-          filler4: '',
-          filler5: '',
-          filler6: '',
-          action: action,
-        });
+      // Skip records with zero difference
+      if (Math.abs(difference) <= 0.01) {
+        console.log(`Skipping ${ucc} - zero difference`);
+        return;
       }
+
+      // Skip records where both ledger and globe amounts are zero
+      if (ledgerAmount === 0 && globeAmount === 0) {
+        console.log(`Skipping ${ucc} - both amounts are zero`);
+        return;
+      }
+
+      // Correct action logic: if ledger > globe = U, if ledger < globe = D
+      let action: 'U' | 'D' = ledgerAmount > globeAmount ? 'U' : 'D';
+      
+      if (action === 'U') {
+        upgradeTotal += Math.abs(difference);
+      } else {
+        downgradeTotal += Math.abs(difference);
+      }
+
+      processedData.push({
+        clicode: ucc,
+        ledgerAmount,
+        globeAmount,
+        action,
+        difference,
+      });
+
+      outputRecords.push({
+        currentDate,
+        segment: 'CM',
+        cmCode: 'M50302',
+        tmCode: '90221',
+        cpCode: '',
+        clicode: ucc,
+        accountType: 'C',
+        amount: ledgerAmount, // Use ledger amount in output
+        filler1: '',
+        filler2: '',
+        filler3: '',
+        filler4: '',
+        filler5: '',
+        filler6: '',
+        action: action,
+      });
     });
 
     // 2. Add records for globe file clients missing in risk file (but only if they have allocations > 0)
@@ -328,12 +335,15 @@ export const processNseCmFiles = async (files: {
       ) {
         console.log(`Adding missing client ${clicode} from globe file with allocation ${allocation}`);
         
+        // For missing clients: ledger=0, globe=allocation, so ledger < globe = D
+        const difference = 0 - allocation; // ledger - globe = 0 - allocation
+        
         processedData.push({
           clicode,
           ledgerAmount: 0,
           globeAmount: allocation,
-          action: 'D',
-          difference: -allocation,
+          action: 'D', // Since ledger (0) < globe (allocation)
+          difference,
         });
         
         downgradeTotal += allocation;
@@ -346,7 +356,7 @@ export const processNseCmFiles = async (files: {
           cpCode: '',
           clicode: clicode,
           accountType: 'C',
-          amount: 0,
+          amount: 0, // Use ledger amount (0) in output
           filler1: '',
           filler2: '',
           filler3: '',
