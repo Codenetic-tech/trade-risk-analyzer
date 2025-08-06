@@ -90,11 +90,6 @@ const LoginPage: React.FC = () => {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-4 space-y-2 text-sm text-center text-slate-500">
-            <div>Demo credentials:</div>
-            <div>Admin: admin / admin123</div>
-            <div>User: user / user123</div>
-          </div>
         </CardContent>
       </Card>
     </div>
