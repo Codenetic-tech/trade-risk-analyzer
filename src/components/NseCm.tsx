@@ -98,7 +98,14 @@ const NseCm: React.FC = () => {
   };
 
   const exportOutputFile = () => {
-    if (!processedData) return;
+    if (!processedData || !processedData.outputRecords || processedData.outputRecords.length === 0) return;
+
+    // Get current date in DDMMYYYY format
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = now.getFullYear();
+    const dateString = `${day}${month}${year}`;
 
     const headers = ['CURRENTDATE', 'SEGMENT', 'CMCODE', 'TMCODE', 'CPCODE', 'CLICODE', 'ACCOUNTTYPE', 'AMOUNT', 'FILLER1', 'FILLER2', 'FILLER3', 'FILLER4', 'FILLER5', 'FILLER6', 'ACTION'];
     const textContent = [
@@ -126,7 +133,7 @@ const NseCm: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'nse_cm_output.txt';
+    link.download = `90221_ALLOC_${dateString}.T0001`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
