@@ -257,6 +257,14 @@ const EveningIntersegment: React.FC = () => {
   const downloadNSEGlobeFile = () => {
     if (processedData.length === 0) return;
 
+    // Get date for filename (DDMMYYYY)
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = now.getFullYear();
+    const dateString = `${day}${month}${year}`;
+
+    // Get date for file content (DD-MMM-YYYY)
     const currentDate = new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -269,7 +277,6 @@ const EveningIntersegment: React.FC = () => {
       const marginUsed = row.MarginUsed;
       const collateralTotal = row.CollateralTotal;
       
-
       let nseAmount;
       if ((cash + payin) < marginUsed) {
         nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
@@ -288,7 +295,7 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'nse_globe_file.txt';
+    link.download = `90221_ALLOC_${dateString}.T0150`;  // Updated filename format
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -296,6 +303,14 @@ const EveningIntersegment: React.FC = () => {
   const downloadMCXGlobeFile = () => {
     if (processedData.length === 0) return;
 
+    // Get date for filename (DDMMYYYY)
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = now.getFullYear();
+    const dateString = `${day}${month}${year}`;
+
+    // Get date for file content (DD-MMM-YYYY)
     const currentDate = new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -313,13 +328,19 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'mcx_globe_file.txt';
+    link.download = `MCCLCOLL_46365_${dateString}.010`;  // Updated filename format
     link.click();
     window.URL.revokeObjectURL(url);
   };
 
   const downloadKambalaNSEFile = () => {
     if (processedData.length === 0) return;
+
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = now.getFullYear();
+    const dateString = `${day}${month}${year}`;
 
     const nseContent = processedData.map(row => {
       return `${row.Entity}|||||||||||||||||no||||||||${Math.round(row.kambalaNseAmount)}`;
@@ -331,13 +352,19 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'kambala_nse_output.txt';
+    link.download = `NSEkambala_${dateString}.txt`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
 
   const downloadKambalaMCXFile = () => {
     if (processedData.length === 0) return;
+
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = now.getFullYear();
+    const dateString = `${day}${month}${year}`;
 
     const mcxContent = processedData.map(row => 
       `${row.Entity}||COM|||||||||||||||no||||||||${Math.round(row.kambalaMcxAmount)}`
@@ -349,7 +376,7 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'kambala_mcx_output.txt';
+    link.download = `MCXkambala_${dateString}.txt`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -532,7 +559,7 @@ const EveningIntersegment: React.FC = () => {
               <CardTitle className="text-sm font-medium text-blue-600">Total 99% Margin</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-700">{formatNumber(summaryTotals.total99Margin)}</div>
+              <div className="text-2xl font-bold text-blue-700">{Number(summaryTotals.total99Margin / 100000).toFixed(2)} L</div>
             </CardContent>
           </Card>
           <Card className="shadow-sm border-green-100">
@@ -540,7 +567,7 @@ const EveningIntersegment: React.FC = () => {
               <CardTitle className="text-sm font-medium text-green-600">Total 1% Margin</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700">{formatNumber(summaryTotals.total1Margin)}</div>
+              <div className="text-2xl font-bold text-green-700">{Number(summaryTotals.total1Margin / 100000).toFixed(2)} L</div>
             </CardContent>
           </Card>
           <Card className="shadow-sm border-purple-100">
@@ -548,7 +575,7 @@ const EveningIntersegment: React.FC = () => {
               <CardTitle className="text-sm font-medium text-purple-600">Total Collateral</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-purple-700">{formatNumber(summaryTotals.totalCollateral)}</div>
+              <div className="text-2xl font-bold text-purple-700">{Number(summaryTotals.totalCollateral / 100000).toFixed(2)} L</div>
             </CardContent>
           </Card>
           <Card className="shadow-sm border-orange-100">
@@ -556,7 +583,7 @@ const EveningIntersegment: React.FC = () => {
               <CardTitle className="text-sm font-medium text-orange-600">Total Available Margin</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-700">{formatNumber(summaryTotals.totalAvailableMargin)}</div>
+              <div className="text-2xl font-bold text-orange-700">{Number(summaryTotals.totalAvailableMargin/ 100000).toFixed(2)} L</div>
             </CardContent>
           </Card>
         </div>
