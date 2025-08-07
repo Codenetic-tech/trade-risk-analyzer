@@ -11,8 +11,6 @@ import Dashboard from './components/Dashboard';
 import EveningIntersegment from './components/EveningIntersegment';
 import Brokerage from './components/Brokerage';
 import NseCm from './components/NseCm';
-import NseFo from './components/NseFo';
-import NseCd from './components/NseCd';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
@@ -101,7 +99,10 @@ const AppContent = () => {
           path="/morning-bod/nse-fo" 
           element={
             <ProtectedRoute>
-              <NseFo />
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-slate-700">F&O</h2>
+                <p className="text-slate-500 mt-2">F&O analysis coming soon...</p>
+              </div>
             </ProtectedRoute>
           } 
         />
@@ -109,7 +110,10 @@ const AppContent = () => {
           path="/morning-bod/nse-cd" 
           element={
             <ProtectedRoute>
-              <NseCd />
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-slate-700">CD</h2>
+                <p className="text-slate-500 mt-2">CD analysis coming soon...</p>
+              </div>
             </ProtectedRoute>
           } 
         />

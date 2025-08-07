@@ -29,6 +29,7 @@ interface AdvancedFiltersProps {
   onFiltersChange: (filters: any) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
+  disabled?: boolean;
 }
 
 const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({

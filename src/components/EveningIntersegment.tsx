@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
-import { Upload, Download, FileSpreadsheet, Calculator, RefreshCw, Package, BarChart3 } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, Calculator, RefreshCw, Package, BarChart3, Search } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -44,6 +44,7 @@ const EveningIntersegment: React.FC = () => {
   const [showVisualization, setShowVisualization] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [mcxProfundInput, setMcxProfundInput] = useState<string>("15");
+  const [isLoading, setIsLoading] = useState(false);
 
   const mcxProfundAmount = useMemo(() => {
     const value = parseFloat(mcxProfundInput);
@@ -146,8 +147,8 @@ const EveningIntersegment: React.FC = () => {
       return;
     }
 
-
     setIsProcessing(true);
+    setIsLoading(true);
 
     try {
       // Parse code Excel file first to get the codes to filter by
@@ -279,6 +280,7 @@ const EveningIntersegment: React.FC = () => {
       });
     } finally {
       setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
@@ -581,204 +583,256 @@ const EveningIntersegment: React.FC = () => {
         <DataVisualization data={processedData} />
       )}
 
-      {/* Summary Cards - Always visible if there's processed data */}
-      {processedData.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-          <Card className="shadow-sm border-blue-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-blue-600">Total 99% Margin</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-700">{Number(summaryTotals.total99Margin / 100000).toFixed(2)} L</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm border-green-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-green-600">Total 1% Margin</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-700">{Number(summaryTotals.total1Margin / 100000).toFixed(2)} L</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm border-purple-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-purple-600">Total Collateral</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-700">{Number(summaryTotals.totalCollateral / 100000).toFixed(2)} L</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm border-orange-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-orange-600">Total Available Margin</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-700">{Number(summaryTotals.totalAvailableMargin/ 100000).toFixed(2)} L</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Summary Cards - Always visible */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+        <Card className="shadow-sm border-blue-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-blue-600">Total 99% Margin</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-700">
+              {processedData.length > 0 
+                ? `${Number(summaryTotals.total99Margin / 100000).toFixed(2)} L` 
+                : '0.00 L'}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-green-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-green-600">Total 1% Margin</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-700">
+              {processedData.length > 0 
+                ? `${Number(summaryTotals.total1Margin / 100000).toFixed(2)} L` 
+                : '0.00 L'}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-purple-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-purple-600">Total Collateral</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-700">
+              {processedData.length > 0 
+                ? `${Number(summaryTotals.totalCollateral / 100000).toFixed(2)} L` 
+                : '0.00 L'}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-orange-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-orange-600">Total Available Margin</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-700">
+              {processedData.length > 0 
+                ? `${Number(summaryTotals.totalAvailableMargin/ 100000).toFixed(2)} L` 
+                : '0.00 L'}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Results Section - Always shown */}
-      {processedData.length > 0 ? (
-        <>
-          {/* One-Click Download All Button */}
-          <div className="flex justify-center">
-            <Button onClick={downloadAllFiles} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-8 py-3 text-white font-semibold shadow-lg">
-              <Package className="h-5 w-5 mr-2" />
-              Download All Files
-            </Button>
-          </div>
+      {/* Advanced Filters */}
+      <AdvancedFilters
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onClearFilters={clearFilters}
+        activeFiltersCount={activeFiltersCount}
+        disabled={processedData.length === 0}
+      />
 
-          {/* Advanced Filters */}
-          <AdvancedFilters
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            filters={filters}
-            onFiltersChange={setFilters}
-            onClearFilters={clearFilters}
-            activeFiltersCount={activeFiltersCount}
-          />
-
-          {/* Results Table */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Processed Data ({filteredData.length} of {processedData.length} records)</CardTitle>
-                <div className="space-x-2 flex flex-wrap gap-2">
-                    {/* MCX Profund Input */}
-                          {processedData.length > 0 && (
-                              <div className="flex flex-col sm:flex-row items-center gap-2">
-                                <div className="flex items-center">
-                                  <span className="mr-2 font-medium text-yellow-700">MCX Profund Amount</span>
-                                  <input
-                                    type="text"
-                                    value={mcxProfundInput}
-                                    onChange={(e) => setMcxProfundInput(e.target.value.replace(/[^0-9.]/g, ''))}
-                                    className="w-20 p-2 border border-yellow-300 rounded-md text-center font-mono"
-                                    placeholder="15"
-                                  />
-                                </div>
-                                <div className="text-sm text-yellow-700 font-mono bg-yellow-100 px-2 py-1 rounded">
-                                  = ₹{new Intl.NumberFormat('en-IN').format(mcxProfundAmount)}
-                                </div>
-                              </div>
-                          )}
-                  <Button onClick={downloadNSEGlobeFile} className="bg-green-600 hover:bg-green-700">
-                    <Download className="h-4 w-4 mr-2" />
-                    NSE Globe
-                  </Button>
-                  <Button onClick={downloadMCXGlobeFile} className="bg-purple-600 hover:bg-purple-700">
-                    <Download className="h-4 w-4 mr-2" />
-                    MCX Globe
-                  </Button>
-                  <Button onClick={downloadKambalaNSEFile} className="bg-blue-600 hover:bg-blue-700">
-                    <Download className="h-4 w-4 mr-2" />
-                    Kambala NSE
-                  </Button>
-                  <Button onClick={downloadKambalaMCXFile} className="bg-orange-600 hover:bg-orange-700">
-                    <Download className="h-4 w-4 mr-2" />
-                    Kambala MCX
-                  </Button>
-                  <Button onClick={exportProcessedData} className="bg-slate-600 hover:bg-slate-700">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export Data
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Entity</TableHead>
-                      <TableHead>Level</TableHead>
-                      <TableHead>Profile</TableHead>
-                      <TableHead className="text-right">Cash</TableHead>
-                      <TableHead className="text-right">Payin</TableHead>
-                      <TableHead className="text-right">Uncleared Cash</TableHead>
-                      <TableHead className="text-right">TOTAL</TableHead>
-                      <TableHead className="text-right">Available Margin</TableHead>
-                      <TableHead className="text-right">Margin Used</TableHead>
-                      <TableHead className="text-right">Available Check</TableHead>
-                      <TableHead className="text-right">Collateral Total</TableHead>
-                      <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
-                      <TableHead className="text-right bg-green-50">1% Margin</TableHead>
-                      <TableHead className="text-right bg-red-50">Kambala NSE</TableHead>
-                      <TableHead className="text-right bg-purple-50">Kambala MCX</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedData.map((row, index) => (
-                      <TableRow key={index} className="hover:bg-slate-50">
-                        <TableCell className="font-medium">{row.Entity}</TableCell>
-                        <TableCell>{row.Level}</TableCell>
-                        <TableCell>{row.Profile}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.Cash)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.Payin)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.UnclearedCash)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.TOTAL)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.MarginUsed)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.AvailableCheck)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold text-red-600 bg-red-50">{formatNumber(row.kambalaNseAmount)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold text-purple-600 bg-purple-50">{formatNumber(row.kambalaMcxAmount)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-slate-600">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+      {/* Results Table - Always visible */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>
+              Processed Data {processedData.length > 0 && 
+                `(${filteredData.length} of ${processedData.length} records)`}
+            </CardTitle>
+            <div className="space-x-2 flex flex-wrap gap-2">
+              {/* MCX Profund Input */}
+              {processedData.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center gap-2">
+                  <div className="flex items-center">
+                    <span className="mr-2 font-medium text-yellow-700">MCX Pro</span>
+                    <input
+                      type="text"
+                      value={mcxProfundInput}
+                      onChange={(e) => setMcxProfundInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                      className="w-20 p-2 border border-yellow-300 rounded-md text-center font-mono"
+                      placeholder="15"
+                    />
                   </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <span className="flex items-center px-3 text-sm text-slate-600">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Next
-                    </Button>
+                  <div className="text-sm text-yellow-700 font-mono bg-yellow-100 px-2 py-1 rounded">
+                    = ₹{new Intl.NumberFormat('en-IN').format(mcxProfundAmount)}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <div className="text-center py-12">
-          <Upload className="mx-auto h-16 w-16 text-slate-400 mb-4" />
-          <h3 className="text-lg font-medium text-slate-800 mb-2">No Data Processed Yet</h3>
-          <p className="text-slate-600 mb-6">Upload your Kambala and Evening Intersegment code files to get started</p>
-          <Button 
-            onClick={() => setShowUploadModal(true)}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Files
-          </Button>
-        </div>
-      )}
+              <Button 
+                onClick={downloadNSEGlobeFile} 
+                className="bg-green-600 hover:bg-green-700"
+                disabled={processedData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                NSE Globe
+              </Button>
+              <Button 
+                onClick={downloadMCXGlobeFile} 
+                className="bg-purple-600 hover:bg-purple-700"
+                disabled={processedData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                MCX Globe
+              </Button>
+              <Button 
+                onClick={downloadKambalaNSEFile} 
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={processedData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Kambala NSE
+              </Button>
+              <Button 
+                onClick={downloadKambalaMCXFile} 
+                className="bg-orange-600 hover:bg-orange-700"
+                disabled={processedData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Kambala MCX
+              </Button>
+              <Button 
+                onClick={downloadAllFiles} 
+                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-8 py-3 text-white font-semibold shadow-lg"
+                disabled={processedData.length === 0 || isLoading}
+              >
+                <Package className="h-4 w-4 mr-2" />
+                {isLoading ? 'Processing...' : 'Download All'}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Level</TableHead>
+                  <TableHead>Profile</TableHead>
+                  <TableHead className="text-right">Cash</TableHead>
+                  <TableHead className="text-right">Payin</TableHead>
+                  <TableHead className="text-right">Uncleared Cash</TableHead>
+                  <TableHead className="text-right">TOTAL</TableHead>
+                  <TableHead className="text-right">Available Margin</TableHead>
+                  <TableHead className="text-right">Margin Used</TableHead>
+                  <TableHead className="text-right">Available Check</TableHead>
+                  <TableHead className="text-right">Collateral Total</TableHead>
+                  <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
+                  <TableHead className="text-right bg-green-50">1% Margin</TableHead>
+                  <TableHead className="text-right bg-red-50">Kambala NSE</TableHead>
+                  <TableHead className="text-right bg-purple-50">Kambala MCX</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={15} className="text-center py-8">
+                      <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
+                      <p className="mt-2 text-slate-600">Processing files...</p>
+                    </TableCell>
+                  </TableRow>
+                ) : processedData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={15} className="text-center py-8">
+                      <FileSpreadsheet className="mx-auto h-12 w-12 text-slate-400" />
+                      <h3 className="mt-2 text-lg font-medium text-slate-800">
+                        No Data Processed Yet
+                      </h3>
+                      <p className="text-slate-600 mb-4">
+                        Upload your Kambala and Evening Intersegment code files
+                      </p>
+                      <Button 
+                        onClick={() => setShowUploadModal(true)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Files
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={15} className="text-center py-8">
+                      <Search className="mx-auto h-12 w-12 text-slate-400" />
+                      <h3 className="mt-2 text-lg font-medium text-slate-800">
+                        No matching records found
+                      </h3>
+                      <p className="text-slate-600">
+                        Try adjusting your search or filters
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedData.map((row, index) => (
+                    <TableRow key={index} className="hover:bg-slate-50">
+                      <TableCell className="font-medium">{row.Entity}</TableCell>
+                      <TableCell>{row.Level}</TableCell>
+                      <TableCell>{row.Profile}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.Cash)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.Payin)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.UnclearedCash)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.TOTAL)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.MarginUsed)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.AvailableCheck)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-red-600 bg-red-50">{formatNumber(row.kambalaNseAmount)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-purple-600 bg-purple-50">{formatNumber(row.kambalaMcxAmount)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination - only show when we have data */}
+          {processedData.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-slate-600">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="flex items-center px-3 text-sm text-slate-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
