@@ -43,6 +43,12 @@ const EveningIntersegment: React.FC = () => {
   const itemsPerPage = 50;
   const [showVisualization, setShowVisualization] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [mcxProfundInput, setMcxProfundInput] = useState<string>("15");
+
+  const mcxProfundAmount = useMemo(() => {
+    const value = parseFloat(mcxProfundInput);
+    return isNaN(value) ? 1500000 : Math.round(value * 100000);
+  }, [mcxProfundInput]);
 
   // Advanced filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,6 +124,28 @@ const EveningIntersegment: React.FC = () => {
       });
       return;
     }
+
+    const kambalaPattern = /^View Limits \d{8}\.(xlsx|xls)$/i;
+    const codePattern = /^NSE TO MCX \d{8}\.(xlsx|xls)$/i;
+
+        if (!kambalaPattern.test(kambalaFile.name)) {
+      toast({
+        title: "Invalid Kambala File Name",
+        description: "Kambala file name must be in the format: 'View Limits DDMMYYYY.xlsx'",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!codePattern.test(codeFile.name)) {
+      toast({
+        title: "Invalid Code File Name",
+        description: "Evening Intersegment code file name must be in the format: 'NSE TO MCX DDMMYYYY.xlsx'",
+        variant: "destructive",
+      });
+      return;
+    }
+
 
     setIsProcessing(true);
 
@@ -321,8 +349,10 @@ const EveningIntersegment: React.FC = () => {
       `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(row.margin99)},,,,,,,A`
     ).join('\n');
 
+    const profundEntry = `${currentDate},CO,8090,46365,,,P,${Math.round(mcxProfundAmount)},,,,,,,A`;
+
     const header = 'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENTS AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
-    const fullContent = header + mcxContent;
+    const fullContent = header + mcxContent + '\n' + profundEntry;
 
     const blob = new Blob([fullContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
@@ -616,6 +646,24 @@ const EveningIntersegment: React.FC = () => {
               <div className="flex justify-between items-center">
                 <CardTitle>Processed Data ({filteredData.length} of {processedData.length} records)</CardTitle>
                 <div className="space-x-2 flex flex-wrap gap-2">
+                    {/* MCX Profund Input */}
+                          {processedData.length > 0 && (
+                              <div className="flex flex-col sm:flex-row items-center gap-2">
+                                <div className="flex items-center">
+                                  <span className="mr-2 font-medium text-yellow-700">MCX Profund Amount</span>
+                                  <input
+                                    type="text"
+                                    value={mcxProfundInput}
+                                    onChange={(e) => setMcxProfundInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                                    className="w-20 p-2 border border-yellow-300 rounded-md text-center font-mono"
+                                    placeholder="15"
+                                  />
+                                </div>
+                                <div className="text-sm text-yellow-700 font-mono bg-yellow-100 px-2 py-1 rounded">
+                                  = ₹{new Intl.NumberFormat('en-IN').format(mcxProfundAmount)}
+                                </div>
+                              </div>
+                          )}
                   <Button onClick={downloadNSEGlobeFile} className="bg-green-600 hover:bg-green-700">
                     <Download className="h-4 w-4 mr-2" />
                     NSE Globe
