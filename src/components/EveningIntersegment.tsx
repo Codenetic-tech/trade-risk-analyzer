@@ -117,38 +117,48 @@ const EveningIntersegment: React.FC = () => {
   };
 
   const processFiles = async (kambalaFile: File | null, codeFile: File | null) => {
-    if (!kambalaFile || !codeFile) {
-      toast({
-        title: "Missing Files",
-        description: "Both Kambala and Evening Intersegment code files are required",
-        variant: "destructive",
-      });
-      return;
-    }
+  if (!kambalaFile || !codeFile) {
+    toast({
+      title: "Missing Files",
+      description: "Both Kambala and Evening Intersegment code files are required",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    const kambalaPattern = /^View Limits \d{8}\.(xlsx|xls)$/i;
-    const codePattern = /^NSE TO MCX \d{8}\.(xlsx|xls)$/i;
+  // Get current date in DDMMYYYY format
+  const getCurrentDateString = () => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = today.getFullYear();
+    return `${day}${month}${year}`;
+  };
+  
+  const todaysDate = getCurrentDateString();
+  const kambalaPattern = new RegExp(`^View Limits ${todaysDate}.(xlsx|xls)$`, "i");
+  const codePattern = new RegExp(`^NSE TO MCX ${todaysDate}.(xlsx|xls)$`, "i");
 
-        if (!kambalaPattern.test(kambalaFile.name)) {
-      toast({
-        title: "Invalid Kambala File Name",
-        description: "Kambala file name must be in the format: 'View Limits DDMMYYYY.xlsx'",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!codePattern.test(codeFile.name)) {
-      toast({
-        title: "Invalid Code File Name",
-        description: "Evening Intersegment code file name must be in the format: 'NSE TO MCX DDMMYYYY.xlsx'",
-        variant: "destructive",
-      });
-      return;
-    }
+  if (!kambalaPattern.test(kambalaFile.name)) {
+    toast({
+      title: "Invalid Kambala File",
+      description: `File name must be: 'View Limits ${todaysDate}.xlsx'`,
+      variant: "destructive",
+    });
+    return;
+  }
+  
+  if (!codePattern.test(codeFile.name)) {
+    toast({
+      title: "Invalid Code File",
+      description: `File name must be: 'NSE TO MCX ${todaysDate}.xlsx'`,
+      variant: "destructive",
+    });
+    return;
+  }
 
-    setIsProcessing(true);
-    setIsLoading(true);
+  setIsProcessing(true);
+  setIsLoading(true);
 
     try {
       // Parse code Excel file first to get the codes to filter by

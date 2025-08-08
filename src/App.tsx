@@ -12,6 +12,7 @@ import EveningIntersegment from './components/EveningIntersegment';
 import Brokerage from './components/Brokerage';
 import NseCm from './components/NseCm';
 import Layout from './components/Layout';
+import NseFo from './components/NseFo';
 
 const queryClient = new QueryClient();
 
@@ -99,10 +100,7 @@ const AppContent = () => {
           path="/morning-bod/nse-fo" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">F&O</h2>
-                <p className="text-slate-500 mt-2">F&O analysis coming soon...</p>
-              </div>
+              <NseFo />
             </ProtectedRoute>
           } 
         />
