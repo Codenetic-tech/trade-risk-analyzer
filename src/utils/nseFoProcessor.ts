@@ -19,6 +19,7 @@ export interface NseFoSummary {
   proFund: number;
   finalAmount: number;
   negativeShortValue: number; // NEW FIELD
+  nmass: number;
 }
 
 export interface NseFoOutputRecord {
@@ -347,9 +348,11 @@ export const processNseFoFiles = async (files: {
 
     // Calculate summary values
     const netValue = upgradeTotal - downgradeTotal;
-    const finalProFund = proFund - 8000000;
+    const finalProFund = proFund - 2500000;
     const unallocatedFundAmount = unallocatedFund * 100000;
     const finalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
+    const sd = finalAmount + 2500000;
+    const nmass = -(negativeShortValue / sd) * 100;
 
     const summary: NseFoSummary = {
       upgradeTotal,
@@ -357,7 +360,8 @@ export const processNseFoFiles = async (files: {
       netValue,
       proFund,
       finalAmount,
-      negativeShortValue
+      negativeShortValue,
+      nmass
     };
 
     // 3. Add ProFund record

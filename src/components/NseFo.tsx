@@ -627,13 +627,17 @@ const NseFo: React.FC = () => {
       });
       
       const netValue = processedData.summary.upgradeTotal - processedData.summary.downgradeTotal;
-      const finalProFund = processedData.summary.proFund - 8000000;
+      const finalProFund = processedData.summary.proFund - 2500000;
       const unallocatedFundAmount = tempUnallocatedFund * 100000;
       const newFinalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
+      const sd = newFinalAmount + 2500000;
+      const newNmass = (processedData.summary.negativeShortValue / sd) * 100;
+      
       
       const updatedSummary = {
         ...processedData.summary,
-        finalAmount: newFinalAmount
+        finalAmount: newFinalAmount,
+        nmass: newNmass
       };
       
       const proFundAction: 'U' | 'D' = processedData.summary.proFund < newFinalAmount ? 'U' : 'D';
@@ -722,7 +726,7 @@ const NseFo: React.FC = () => {
       </div>
 
         {/* Summary Cards - Now 6 cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-green-600 flex items-center">
@@ -815,6 +819,22 @@ const NseFo: React.FC = () => {
               {processedData 
                 ? `₹-${(processedData.summary.negativeShortValue / 100000).toFixed(2)} L` 
                 : '₹0.00 L'}
+            </div>
+          </CardContent>
+        </Card>
+        {/* New card for negative short values */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-orange-600 flex items-center">
+              <TrendingDown className="h-4 w-4 mr-2" />
+              NMASS Value
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-700">
+              {processedData 
+                ? `₹${(processedData.summary.nmass).toFixed(2)} %` 
+                : '₹0.00 %'}
             </div>
           </CardContent>
         </Card>
