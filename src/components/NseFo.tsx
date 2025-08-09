@@ -467,12 +467,9 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
             <TableBody>
               {data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                  <TableCell colSpan={9} className="text-center py-12 text-slate-500">
                     <UploadIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
                     <p className="text-lg font-medium">No data available</p>
-                    <p className="text-sm mt-2">
-                      Upload files to begin analyzing NSE CM allocations
-                    </p>
                     <Button 
                       onClick={onUploadClick}
                       className="mt-4 bg-blue-600 hover:bg-blue-700"
@@ -483,7 +480,7 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
                 </TableRow>
               ) : paginatedData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                  <TableCell colSpan={9} className="text-center py-12 text-slate-500">
                     <Search className="mx-auto h-12 w-12 text-slate-400 mb-4" />
                     <p className="text-lg font-medium">No matching records found</p>
                     <p className="text-sm mt-2">
@@ -726,7 +723,7 @@ const NseFo: React.FC = () => {
       </div>
 
         {/* Summary Cards - Now 6 cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-green-600 flex items-center">

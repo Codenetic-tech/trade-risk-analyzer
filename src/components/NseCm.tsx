@@ -312,7 +312,7 @@ const NseCm: React.FC = () => {
       </div>
 
       {/* Summary Cards - Always Visible */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-green-600 flex items-center">
