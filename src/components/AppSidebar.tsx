@@ -21,6 +21,7 @@ import {
   Shield,
   ChevronRight,
   ChevronDown,
+  IndianRupee,
 } from 'lucide-react';
 
 const menuItems = [
@@ -64,6 +65,12 @@ const menuItems = [
     title: 'Allocation Check',
     url: '/allocation-check',
     icon: CheckSquare,
+    color: 'text-teal-600'
+  },
+  {
+    title: 'Payin',
+    url: '/payin',
+    icon: IndianRupee,
     color: 'text-teal-600'
   },
   {

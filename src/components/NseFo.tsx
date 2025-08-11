@@ -345,7 +345,7 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
   };
 
   const exportToCsv = () => {
-    const headers = ['CLICODE', 'Ledger Amount', 'Globe Amount', 'Action', 'Difference'];
+    const headers = ['CLICODE', 'Ledger Amount', 'Globe Amount', 'Action', 'Difference', 'ninetyPercentLedger','cc01Margin','shortValue'];
     const csvContent = [
       headers.join(','),
       ...filteredData.map(row => [
@@ -353,7 +353,10 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
         row.ledgerAmount,
         row.globeAmount,
         row.action,
-        row.difference
+        row.difference,
+        row.ninetyPercentLedger,
+        row.cc01Margin,
+        row.shortValue
       ].join(','))
     ].join('\n');
 

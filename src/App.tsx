@@ -64,10 +64,7 @@ const AppContent = () => {
           path="/allocation-check" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">Allocation Check</h2>
-                <p className="text-slate-500 mt-2">Allocation check section coming soon...</p>
-              </div>
+              <Dashboard />
             </ProtectedRoute>
           } 
         />
@@ -160,6 +157,17 @@ const AppContent = () => {
               <div className="text-center py-12">
                 <h2 className="text-2xl font-bold text-slate-700">Downloads</h2>
                 <p className="text-slate-500 mt-2">Downloads section coming soon...</p>
+              </div>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/payin" 
+          element={
+            <ProtectedRoute>
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-slate-700">Payin</h2>
+                <p className="text-slate-500 mt-2">Payin analysis coming soon...</p>
               </div>
             </ProtectedRoute>
           } 
