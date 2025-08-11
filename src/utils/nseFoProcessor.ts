@@ -137,14 +137,13 @@ const parseExcel = async (file: File): Promise<any[]> => {
           }
         }
 
-        // Only include rows with balance > 0
-        if (balance > 0) {
-          processedData.push({
-            Name: name,
-            UCC: ucc,
-            NSE_FO_Balance: balance  // Fixed field name
-          });
-        }
+        // Only include rows with balance > 0 OR if they have CC01 margin
+        // We'll check CC01 in processing, so include all UCCs for now
+        processedData.push({
+          Name: name,
+          UCC: ucc,
+          NSE_FO_Balance: balance  // This will be 0 for negative/zero original values
+        });
       }
         
         resolve(processedData);
@@ -245,23 +244,34 @@ export const processNseFoFiles = async (files: {
       const shortValue = ninetyPercentLedger - cc01Margin;
       const ninetyabove = (cc01Margin / ledgerAmount) * 100; 
       
-      // Accumulate negative short values
+      // Accumulate negative short values for ALL records
       if (shortValue < 0) {
         negativeShortValue += Math.abs(shortValue);
       }
 
-      // Skip records with zero difference and both amounts zero
-      if (Math.abs(difference) <= 0.01) continue;
-      if (ledgerAmount === 0 && globeAmount === 0) continue;
+      // SKIP LOGIC: Skip if difference=0 AND both amounts=0, EXCEPT if there's CC01 margin
+      const hasZeroDifference = Math.abs(difference) <= 0.01;
+      const hasBothAmountsZero = (ledgerAmount === 0 && globeAmount === 0);
+      const hasCC01Value = cc01Margin > 0;
+      
+      // Skip if: zero difference AND both amounts zero AND no CC01 value
+      if (hasZeroDifference && hasBothAmountsZero && !hasCC01Value) {
+        continue;
+      }
 
       // Determine action
       let action: 'U' | 'D' = ledgerAmount > globeAmount ? 'U' : 'D';
-      if (action === 'U') {
-        upgradeTotal += difference;
-      } else {
-        downgradeTotal += Math.abs(difference);
+      
+      // Only add to upgrade/downgrade totals if there's an actual difference (for output file calculation)
+      if (Math.abs(difference) > 0.01) {
+        if (action === 'U') {
+          upgradeTotal += difference;
+        } else {
+          downgradeTotal += Math.abs(difference);
+        }
       }
 
+      // Add to UI table data
       processedData.push({
         clicode: ucc,
         ledgerAmount,
@@ -274,23 +284,26 @@ export const processNseFoFiles = async (files: {
         ninetyabove
       });
 
-      outputRecords.push({
-        currentDate,
-        segment: 'FO',
-        cmCode: 'M50302',
-        tmCode: '90221',
-        cpCode: '',
-        clicode: ucc,
-        accountType: 'C',
-        amount: ledgerAmount,
-        filler1: '',
-        filler2: '',
-        filler3: '',
-        filler4: '',
-        filler5: '',
-        filler6: '',
-        action: action,
-      });
+      // Only create output records for records with actual differences (output file logic unchanged)
+      if (Math.abs(difference) > 0.01) {
+        outputRecords.push({
+          currentDate,
+          segment: 'FO',
+          cmCode: 'M50302',
+          tmCode: '90221',
+          cpCode: '',
+          clicode: ucc,
+          accountType: 'C',
+          amount: ledgerAmount,
+          filler1: '',
+          filler2: '',
+          filler3: '',
+          filler4: '',
+          filler5: '',
+          filler6: '',
+          action: action,
+        });
+      }
     }
 
     // 2. Add records for globe file clients missing in risk file

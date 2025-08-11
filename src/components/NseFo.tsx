@@ -24,6 +24,7 @@ import {
   FileSpreadsheet,
   Upload as UploadIcon,
   X,
+  IndianRupee,
 } from 'lucide-react';
 import {
   Table,
@@ -817,7 +818,7 @@ const NseFo: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold text-orange-700">
               {processedData 
-                ? `₹-${(processedData.summary.negativeShortValue / 100000).toFixed(2)} L` 
+                ? `₹${(processedData.summary.negativeShortValue / 100000).toFixed(2)} L` 
                 : '₹0.00 L'}
             </div>
           </CardContent>
@@ -826,14 +827,14 @@ const NseFo: React.FC = () => {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-orange-600 flex items-center">
-              <TrendingDown className="h-4 w-4 mr-2" />
+              <IndianRupee className="h-4 w-4 mr-2" />
               NMASS Value
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-700">
               {processedData 
-                ? `₹${(processedData.summary.nmass).toFixed(2)} %` 
+                ? `${(processedData.summary.nmass).toFixed(2)} %` 
                 : '₹0.00 %'}
             </div>
           </CardContent>

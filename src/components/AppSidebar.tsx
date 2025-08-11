@@ -68,8 +68,8 @@ const menuItems = [
     color: 'text-teal-600'
   },
   {
-    title: 'Payin',
-    url: '/payin',
+    title: 'Payout',
+    url: '/payout',
     icon: IndianRupee,
     color: 'text-teal-600'
   },

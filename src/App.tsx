@@ -162,7 +162,7 @@ const AppContent = () => {
           } 
         />
         <Route 
-          path="/payin" 
+          path="/payout" 
           element={
             <ProtectedRoute>
               <div className="text-center py-12">
