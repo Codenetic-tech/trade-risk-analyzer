@@ -386,7 +386,7 @@ export const processNseCmFiles = async (files: {
     };
 
     // 3. Add ProFund record using finalAmount at the beginning with correct action logic
-    const proFundAction: 'U' | 'D' = proFund < finalAmount ? 'U' : 'D';
+    const proFundAction: 'U' | 'D' = finalProFund < finalAmount ? 'U' : 'D';
     
     outputRecords.unshift({
       currentDate,

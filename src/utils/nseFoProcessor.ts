@@ -378,7 +378,7 @@ export const processNseFoFiles = async (files: {
     };
 
     // 3. Add ProFund record
-    const proFundAction: 'U' | 'D' = proFund < finalAmount ? 'U' : 'D';
+    const proFundAction: 'U' | 'D' = finalProFund < finalAmount ? 'U' : 'D';
     
     outputRecords.unshift({
       currentDate,

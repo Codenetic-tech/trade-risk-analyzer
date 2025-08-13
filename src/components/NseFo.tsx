@@ -641,7 +641,7 @@ const NseFo: React.FC = () => {
         nmass: newNmass
       };
       
-      const proFundAction: 'U' | 'D' = processedData.summary.proFund < newFinalAmount ? 'U' : 'D';
+      const proFundAction: 'U' | 'D' = finalProFund < newFinalAmount ? 'U' : 'D';
       
       const updatedOutputRecords = processedData.outputRecords.map((record, index) => {
         if (index === 0 && record.accountType === 'P') {

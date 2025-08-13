@@ -59,6 +59,15 @@ const NseCm: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 100;
 
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof NseCmData | null;
+    direction: 'asc' | 'desc';
+  }>({
+    key: null,
+    direction: 'asc',
+  });
+
   // Modal state
   const [riskFile, setRiskFile] = useState<File | null>(null);
   const [nseFile, setNseFile] = useState<File | null>(null);
@@ -113,7 +122,7 @@ const NseCm: React.FC = () => {
         finalAmount: newFinalAmount
       };
       
-      const proFundAction: 'U' | 'D' = processedData.summary.proFund < newFinalAmount ? 'U' : 'D';
+      const proFundAction: 'U' | 'D' = finalProFund < newFinalAmount ? 'U' : 'D';
       
       const updatedOutputRecords = processedData.outputRecords.map((record, index) => {
         if (index === 0 && record.accountType === 'P') {
@@ -181,11 +190,35 @@ const NseCm: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // Filter table data
+  // Sorting handler
+  const handleSort = (key: keyof NseCmData) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Filter and sort table data
   const filteredData = useMemo(() => {
     if (!processedData) return [];
     
-    return processedData.data.filter(item => {
+    const data = [...processedData.data];
+    
+    // Apply sorting if sortConfig is set
+    if (sortConfig.key) {
+      data.sort((a, b) => {
+        if (a[sortConfig.key!] < b[sortConfig.key!]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key!] > b[sortConfig.key!]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    
+    return data.filter(item => {
       const matchesSearch = item.clicode.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAction = actionFilter === 'all' || item.action === actionFilter;
       const matchesAmount = amountFilter === 'all' || 
@@ -195,7 +228,7 @@ const NseCm: React.FC = () => {
       
       return matchesSearch && matchesAction && matchesAmount;
     });
-  }, [processedData, searchQuery, actionFilter, amountFilter]);
+  }, [processedData, searchQuery, actionFilter, amountFilter, sortConfig]);
 
   // Paginate table data
   const paginatedData = useMemo(() => {
@@ -537,6 +570,7 @@ const NseCm: React.FC = () => {
                 setSearchQuery('');
                 setActionFilter('all');
                 setAmountFilter('all');
+                setSortConfig({ key: null, direction: 'asc' }); // Reset sorting too
               }}
               className="flex items-center"
               disabled={!processedData || isProcessing}
@@ -552,11 +586,59 @@ const NseCm: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>CLICODE</TableHead>
-                  <TableHead className="text-right">Ledger Amount</TableHead>
-                  <TableHead className="text-right">Globe Amount</TableHead>
+                  <TableHead>
+                    <button 
+                      onClick={() => handleSort('clicode')}
+                      className="flex items-center font-medium"
+                    >
+                      CLICODE
+                      {sortConfig.key === 'clicode' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('ledgerAmount')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Ledger Amount
+                      {sortConfig.key === 'ledgerAmount' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('globeAmount')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Globe Amount
+                      {sortConfig.key === 'globeAmount' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
                   <TableHead>Action</TableHead>
-                  <TableHead className="text-right">Difference</TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('difference')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Difference
+                      {sortConfig.key === 'difference' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -568,6 +650,9 @@ const NseCm: React.FC = () => {
                           <Upload className="h-8 w-8 text-gray-500" />
                         </div>
                         <p className="text-lg font-medium text-gray-700">No data available</p>
+                        <p className="text-gray-500 max-w-md text-center">
+                          Upload Risk, NSE Globe, and NRI files to analyze NSE CM allocation differences
+                        </p>
                         <Button 
                           onClick={() => setShowUploadModal(true)}
                           className="mt-4 bg-blue-600 hover:bg-blue-700"
