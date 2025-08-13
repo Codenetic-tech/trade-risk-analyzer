@@ -392,7 +392,11 @@ const EveningIntersegment: React.FC = () => {
   };
 
   const downloadKambalaNSEFile = () => {
-    if (processedData.length === 0) return;
+
+    const filteredData = processedData.filter(row => 
+    row.kambalaNseAmount !== 0
+    );
+    if (filteredData.length === 0) return;
 
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
@@ -400,7 +404,7 @@ const EveningIntersegment: React.FC = () => {
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
-    const nseContent = processedData.map(row => {
+    const nseContent = filteredData.map(row => {
       return `${row.Entity}|||||||||||||||||no||||||||${Math.round(row.kambalaNseAmount)}`;
     }).join('\n');
 
@@ -416,7 +420,12 @@ const EveningIntersegment: React.FC = () => {
   };
 
   const downloadKambalaMCXFile = () => {
-    if (processedData.length === 0) return;
+
+    const filteredData = processedData.filter(row => 
+    row.kambalaNseAmount !== 0
+    );
+    if (filteredData.length === 0) return;
+
 
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
@@ -424,7 +433,7 @@ const EveningIntersegment: React.FC = () => {
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
-    const mcxContent = processedData.map(row => 
+    const mcxContent = filteredData.map(row => 
       `${row.Entity}||COM|||||||||||||||no||||||||${Math.round(row.kambalaMcxAmount)}`
     ).join('\n');
 
