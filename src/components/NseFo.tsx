@@ -24,7 +24,6 @@ import {
   FileSpreadsheet,
   Upload as UploadIcon,
   X,
-  IndianRupee,
 } from 'lucide-react';
 import {
   Table,
@@ -99,10 +98,10 @@ const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <UploadIcon className="h-5 w-5 text-blue-600" />
-            <span>Upload Files for NSE CM Analysis</span>
+            <span>Upload Files for NSE F&O Analysis</span>
           </DialogTitle>
           <DialogDescription>
-            Upload Risk Excel file, NSE Globe file, and CC01 CSV file to process NSE CM data.
+            Upload Risk Excel file, NSE Globe file, and CC01 CSV file to process NSE F&O data.
           </DialogDescription>
         </DialogHeader>
 
@@ -288,8 +287,41 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
   const itemsPerPage = 100;
   const [ninetyAboveFilter, setNinetyAboveFilter] = useState('all');
 
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof NseFoData | null;
+    direction: 'asc' | 'desc';
+  }>({
+    key: null,
+    direction: 'asc',
+  });
+
+  // Sorting handler
+  const handleSort = (key: keyof NseFoData) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
   const filteredData = useMemo(() => {
-    return data.filter(item => {
+    const filteredArray = [...data];
+    
+    // Apply sorting if sortConfig is set
+    if (sortConfig.key) {
+      filteredArray.sort((a, b) => {
+        if (a[sortConfig.key!] < b[sortConfig.key!]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key!] > b[sortConfig.key!]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    
+    return filteredArray.filter(item => {
       const matchesSearch = item.clicode.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAction = actionFilter === 'all' || item.action === actionFilter;
       const matchesAmount = amountFilter === 'all' || 
@@ -306,7 +338,7 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
       
       return matchesSearch && matchesAction && matchesAmount && matchesNinetyAbove;
     });
-  }, [data, searchQuery, actionFilter, amountFilter, ninetyAboveFilter]);
+  }, [data, searchQuery, actionFilter, amountFilter, ninetyAboveFilter, sortConfig]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -315,9 +347,10 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
+  // Reset pagination on filter change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, actionFilter, amountFilter]);
+  }, [searchQuery, actionFilter, amountFilter, ninetyAboveFilter]);
 
   const getActionBadge = (action: string) => {
     if (action === 'U') {
@@ -365,7 +398,7 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'nse_cm_analysis.csv';
+    link.download = 'nse_fo_analysis.csv';
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -442,6 +475,7 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
               setActionFilter('all');
               setAmountFilter('all');
               setNinetyAboveFilter('all');
+              setSortConfig({ key: null, direction: 'asc' }); // Reset sorting too
             }}
             className="flex items-center"
             disabled={data.length === 0}
@@ -457,15 +491,111 @@ const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>CLICODE</TableHead>
-                <TableHead className="text-right">Ledger Amount</TableHead>
-                <TableHead className="text-right">Globe Amount</TableHead>
+                <TableHead>
+                  <button 
+                    onClick={() => handleSort('clicode')}
+                    className="flex items-center font-medium"
+                  >
+                    CLICODE
+                    {sortConfig.key === 'clicode' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('ledgerAmount')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    Ledger Amount
+                    {sortConfig.key === 'ledgerAmount' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('globeAmount')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    Globe Amount
+                    {sortConfig.key === 'globeAmount' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Action</TableHead>
-                <TableHead className="text-right">Difference</TableHead>
-                <TableHead className="text-right">CC01 Margin</TableHead>
-                <TableHead className="text-right">90% of Ledger</TableHead>
-                <TableHead className="text-right">90% above</TableHead>
-                <TableHead className="text-right">Short Value</TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('difference')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    Difference
+                    {sortConfig.key === 'difference' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('cc01Margin')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    CC01 Margin
+                    {sortConfig.key === 'cc01Margin' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('ninetyPercentLedger')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    90% of Ledger
+                    {sortConfig.key === 'ninetyPercentLedger' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('ninetyabove')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    90% above
+                    {sortConfig.key === 'ninetyabove' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button 
+                    onClick={() => handleSort('shortValue')}
+                    className="flex justify-end w-full items-center font-medium"
+                  >
+                    Short Value
+                    {sortConfig.key === 'shortValue' && (
+                      <span className="ml-1">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -710,7 +840,7 @@ const NseFo: React.FC = () => {
   if (isProcessing) {
     return (
       <ModernLoading 
-        message="Processing NSE CM Files"
+        message="Processing NSE F&O Files"
         subMessage="Analyzing risk data, globe allocations, and CC01 exclusions. This may take a few moments."
       />
     );
@@ -726,7 +856,7 @@ const NseFo: React.FC = () => {
         </p>
       </div>
 
-        {/* Summary Cards - Now 6 cards */}
+        {/* Summary Cards - Now 7 cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
         <Card>
           <CardHeader className="pb-2">
@@ -823,19 +953,19 @@ const NseFo: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-        {/* New card for negative short values */}
+        {/* New card for NMASS values */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-orange-600 flex items-center">
-              <IndianRupee className="h-4 w-4 mr-2" />
+            <CardTitle className="text-sm font-medium text-pink-600 flex items-center">
+              <Calculator className="h-4 w-4 mr-2" />
               NMASS Value
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-700">
+            <div className="text-2xl font-bold text-pink-700">
               {processedData 
-                ? `${(processedData.summary.nmass).toFixed(2)} %` 
-                : '₹0.00 %'}
+                ? `${(processedData.summary.nmass).toFixed(2)}%` 
+                : '0.00%'}
             </div>
           </CardContent>
         </Card>
