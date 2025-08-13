@@ -241,8 +241,24 @@ const EveningIntersegment: React.FC = () => {
 
         // New Kambala calculations based on uncleared cash
         let kambalaNseAmount, kambalaMcxAmount;
+
+        if (collateralTotal > 0) {
+          // Collateral client logic
+          if (marginUsed < collateralTotal) {
+            kambalaNseAmount = -Math.round((cash + payin) * 0.99);
+          } else {
+            const newValue = collateralTotal - marginUsed;
+            if (newValue < (cash + payin)) {
+              const amount = (cash + payin) + newValue;
+              kambalaNseAmount = -Math.round(amount * 0.99);
+            } else {
+              kambalaNseAmount = 0;
+            }
+          }
+          kambalaMcxAmount = -kambalaNseAmount;
+        } 
         
-        if (unclearedCash !== 0) {
+        else if (unclearedCash !== 0) {
           // ✅ If margin used is 0, treat 1% of margin as ₹100
           const onePercent = marginUsed === 0 ? 100 : marginUsed * 0.01;
           const newMarginUsed = marginUsed + onePercent;
