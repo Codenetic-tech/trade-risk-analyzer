@@ -13,6 +13,7 @@ import Brokerage from './components/Brokerage';
 import NseCm from './components/NseCm';
 import Layout from './components/Layout';
 import NseFo from './components/NseFo';
+import Payout from './components/payout';
 
 const queryClient = new QueryClient();
 
@@ -165,10 +166,7 @@ const AppContent = () => {
           path="/payout" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">Payin</h2>
-                <p className="text-slate-500 mt-2">Payin analysis coming soon...</p>
-              </div>
+              <Payout />
             </ProtectedRoute>
           } 
         />
