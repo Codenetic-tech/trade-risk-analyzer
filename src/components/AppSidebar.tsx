@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// AppSidebar.tsx
+import React, { useState, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Sidebar,
@@ -23,61 +24,71 @@ import {
   ChevronDown,
   IndianRupee,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 
-const menuItems = [
+// Define all possible menu items
+const allMenuItems = [
   {
     title: 'Dashboard',
     url: '/dashboard',
     icon: LayoutDashboard,
-    color: 'text-blue-600'
+    color: 'text-blue-600',
+    roles: ['Risk Manager', 'Analyst'] // All roles can see dashboard
   },
   {
     title: 'Morning BOD',
     url: '/morning-bod',
     icon: Sunrise,
     color: 'text-orange-600',
+    roles: ['Risk Manager', 'Analyst'], // Only Risk Manager and Analyst
     subItems: [
-      { title: 'NSE CM', url: '/morning-bod/nse-cm' },
-      { title: 'NSE F&O', url: '/morning-bod/nse-fo' },
-      { title: 'NSE CD', url: '/morning-bod/nse-cd' },
-      { title: 'MCX', url: '/morning-bod/mcx' },
+      { title: 'NSE CM', url: '/morning-bod/nse-cm', roles: ['Risk Manager', 'Analyst'] },
+      { title: 'NSE F&O', url: '/morning-bod/nse-fo', roles: ['Risk Manager', 'Analyst'] },
+      { title: 'NSE CD', url: '/morning-bod/nse-cd', roles: ['Risk Manager', 'Analyst'] },
+      { title: 'MCX', url: '/morning-bod/mcx', roles: ['Risk Manager', 'Analyst'] },
     ]
   },
   {
     title: 'Reports',
     url: '/reports',
     icon: FileSpreadsheet,
-    color: 'text-indigo-600'
+    color: 'text-indigo-600',
+    roles: ['Risk Manager', 'Analyst'] // Only Risk Manager and Analyst
   },
   {
     title: 'Brokerage',
     url: '/brokerage',
     icon: TrendingUp,
-    color: 'text-green-600'
+    color: 'text-green-600',
+    roles: ['Risk Manager', 'Analyst'] // Only Risk Manager and Analyst
   },
   {
     title: 'Evening Intersegment',
     url: '/evening-intersegment',
     icon: Clock,
-    color: 'text-purple-600'
+    color: 'text-purple-600',
+    roles: ['Risk Manager', 'Analyst'] // Only Risk Manager and Analyst
   },
   {
     title: 'Allocation Check',
     url: '/allocation-check',
     icon: CheckSquare,
-    color: 'text-teal-600'
+    color: 'text-teal-600',
+    roles: ['Risk Manager', 'Analyst'] // Only Risk Manager and Analyst
   },
   {
     title: 'Payout',
     url: '/payout',
     icon: IndianRupee,
-    color: 'text-teal-600'
+    color: 'text-teal-600',
+    roles: ['Risk Manager', 'Analyst', 'Banking'] // All roles can see payout
   },
   {
     title: 'Settings',
     url: '/settings',
     icon: Settings,
-    color: 'text-slate-600'
+    color: 'text-slate-600',
+    roles: ['Risk Manager'] // Only Risk Manager
   },
 ];
 
@@ -86,9 +97,32 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
   const [expandedItems, setExpandedItems] = useState<string[]>(['Morning BOD']);
+  const { user } = useAuth(); // Get current user
 
   const isActive = (path: string) => currentPath === path;
   const isCollapsed = state === 'collapsed';
+
+  // Filter menu items based on user role
+  const menuItems = useMemo(() => {
+    if (!user) return [];
+    
+      return allMenuItems.filter(item => {
+      // First, check if user has access to the main item
+      if (!item.roles.includes(user.role)) return false;
+      
+      // For items with subitems, filter the subitems
+      if (item.subItems) {
+        item.subItems = item.subItems.filter(subItem => 
+          subItem.roles.includes(user.role)
+        );
+        // Only show main item if it has visible subitems
+        return item.subItems.length > 0;
+      }
+      
+      return true;
+    });
+  }, [user]);
+
 
   const toggleExpanded = (title: string) => {
     setExpandedItems(prev => 
@@ -116,6 +150,11 @@ export function AppSidebar() {
             {!isCollapsed && (
               <div className="transition-all duration-300">
                 <h2 className="font-bold text-xl text-slate-800 tracking-tight">GoPocket</h2>
+                {user && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    {user.role} • {user.username}
+                  </p>
+                )}
               </div>
             )}
           </div>

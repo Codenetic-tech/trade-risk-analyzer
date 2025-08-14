@@ -1,4 +1,4 @@
-
+// AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface User {
@@ -48,10 +48,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    // Updated credentials - admin/admin123 and user/user123
+    // Updated credentials with banking role
     const validCredentials = [
       { username: 'admin', password: 'admin123', role: 'Risk Manager' },
-      { username: 'user', password: 'user123', role: 'Analyst' }
+      { username: 'user', password: 'user123', role: 'Analyst' },
+      { username: 'banking', password: 'banking123', role: 'Banking' }
     ];
 
     const validUser = validCredentials.find(
@@ -60,7 +61,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (validUser) {
       const userData = {
-        id: validUser.username === 'admin' ? '1' : '2',
+        id: validUser.username === 'admin' ? '1' : validUser.username === 'user' ? '2' : '3',
         username: validUser.username,
         email: `${validUser.username}@rms.com`,
         role: validUser.role
