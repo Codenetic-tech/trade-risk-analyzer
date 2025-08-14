@@ -922,18 +922,36 @@ const NseFo: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={
+            processedData?.summary.finalAmount < 0
+              ? "bg-red-600 border-red-1000"
+              : ""
+          }
+        >
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-cyan-600 flex items-center">
+            <CardTitle
+              className={`text-sm font-medium flex items-center ${
+                processedData?.summary.finalAmount < 0
+                  ? "text-white"
+                  : "text-cyan-600"
+              }`}
+            >
               <Calculator className="h-4 w-4 mr-2" />
               Final Amount
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-cyan-700">
-              {processedData 
-                ? `₹${(processedData.summary.finalAmount / 100000).toFixed(2)} L` 
-                : '₹0.00 L'}
+            <div
+              className={`text-2xl font-bold ${
+                processedData?.summary.finalAmount < 0
+                  ? "text-white"
+                  : "text-cyan-700"
+              }`}
+            >
+              {processedData
+                ? `₹${(processedData.summary.finalAmount / 100000).toFixed(2)} L`
+                : "₹0.00 L"}
             </div>
           </CardContent>
         </Card>
@@ -954,18 +972,40 @@ const NseFo: React.FC = () => {
           </CardContent>
         </Card>
         {/* New card for NMASS values */}
-        <Card>
+        <Card
+          className={
+            processedData?.summary.nmass < 0
+              ? "bg-red-600 border-red-1000"
+              : ""
+          }
+        >
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-pink-600 flex items-center">
-              <Calculator className="h-4 w-4 mr-2" />
+            <CardTitle
+              className={`text-sm font-medium flex items-center ${
+                processedData?.summary.nmass < 0
+                  ? "text-white"
+                  : "text-pink-600"
+              }`}
+            >
+              <Calculator
+                className={`h-4 w-4 mr-2 ${
+                  processedData?.summary.nmass < 0 ? "text-white" : ""
+                }`}
+              />
               NMASS Value
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-pink-700">
-              {processedData 
-                ? `${(processedData.summary.nmass).toFixed(2)}%` 
-                : '0.00%'}
+            <div
+              className={`text-2xl font-bold ${
+                processedData?.summary.nmass < 0
+                  ? "text-white"
+                  : "text-pink-700"
+              }`}
+            >
+              {processedData
+                ? `${processedData.summary.nmass.toFixed(2)}%`
+                : "0.00%"}
             </div>
           </CardContent>
         </Card>

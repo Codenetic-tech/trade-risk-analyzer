@@ -402,16 +402,36 @@ const NseCm: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={
+            processedData?.summary.finalAmount < 0
+              ? "bg-red-600 border-red-1000"
+              : ""
+          }
+        >
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-orange-600 flex items-center">
+            <CardTitle
+              className={`text-sm font-medium flex items-center ${
+                processedData?.summary.finalAmount < 0
+                  ? "text-white"
+                  : "text-cyan-600"
+              }`}
+            >
               <Calculator className="h-4 w-4 mr-2" />
               Final Amount
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-700">
-              ₹{(processedData ? (processedData.summary.finalAmount / 100000).toFixed(2) : '0.00')} L
+            <div
+              className={`text-2xl font-bold ${
+                processedData?.summary.finalAmount < 0
+                  ? "text-white"
+                  : "text-cyan-700"
+              }`}
+            >
+              {processedData
+                ? `₹${(processedData.summary.finalAmount / 100000).toFixed(2)} L`
+                : "₹0.00 L"}
             </div>
           </CardContent>
         </Card>
