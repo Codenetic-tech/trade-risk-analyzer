@@ -1,707 +1,23 @@
 import React, { useState, useMemo } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Banknote,
-  Calculator,
-  Download,
-  Settings,
-  Edit,
-  Search,
-  Filter,
-  FileSpreadsheet,
-  Upload as UploadIcon,
-  X,
-} from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { TrendingUp, TrendingDown, Download, Settings, Edit, Search, Filter, Upload as UploadIcon, Save, X } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select';
 import { processNseFoFiles, NseFoData, NseFoSummary, NseFoOutputRecord } from '@/utils/nseFoProcessor';
 import ModernLoading from './ModernLoading';
-
-// ============================================================================
-// Upload Modal Component
-// ============================================================================
-interface NseFoUploadProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onFilesSelected: (files: {
-    risk: File | null;
-    nse: File | null;
-    cc01: File | null;
-  }) => void;
-}
-
-const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
-  open,
-  onOpenChange,
-  onFilesSelected,
-}) => {
-  const [riskFile, setRiskFile] = useState<File | null>(null);
-  const [nseFile, setNseFile] = useState<File | null>(null);
-  const [cc01File, setCc01File] = useState<File | null>(null);
-
-  const handleFileSelect = (type: 'risk' | 'nse' | 'cc01', file: File) => {
-    if (type === 'risk') {
-      setRiskFile(file);
-    } else if (type === 'nse') {
-      setNseFile(file);
-    } else {
-      setCc01File(file);
-    }
-  };
-
-  const handleConfirm = () => {
-    onFilesSelected({ risk: riskFile, nse: nseFile, cc01: cc01File });
-    onOpenChange(false);
-    setRiskFile(null);
-    setNseFile(null);
-    setCc01File(null);
-  };
-
-  const handleCancel = () => {
-    onOpenChange(false);
-    setRiskFile(null);
-    setNseFile(null);
-    setCc01File(null);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
-            <UploadIcon className="h-5 w-5 text-blue-600" />
-            <span>Upload Files for NSE F&O Analysis</span>
-          </DialogTitle>
-          <DialogDescription>
-            Upload Risk Excel file, NSE Globe file, and CC01 CSV file to process NSE F&O data.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
-          <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                <span>Risk File</span>
-              </CardTitle>
-              <CardDescription>Upload the Risk Excel file (.xlsx)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {riskFile ? (
-                <div className="text-center py-4">
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-green-800">{riskFile.name}</p>
-                      <p className="text-xs text-green-600">File uploaded successfully</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setRiskFile(null)}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UploadIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                  <label htmlFor="risk-upload-modal" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">
-                      Click to upload
-                    </span>
-                  </label>
-                  <input
-                    id="risk-upload-modal"
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileSelect('risk', file);
-                    }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileSpreadsheet className="h-5 w-5 text-green-600" />
-                <span>NSE Globe File</span>
-              </CardTitle>
-              <CardDescription>Upload the NSE Globe CSV file (.csv)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {nseFile ? (
-                <div className="text-center py-4">
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-green-800">{nseFile.name}</p>
-                      <p className="text-xs text-green-600">File uploaded successfully</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setNseFile(null)}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UploadIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                  <label htmlFor="nse-upload-modal" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">
-                      Click to upload
-                    </span>
-                  </label>
-                  <input
-                    id="nse-upload-modal"
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileSelect('nse', file);
-                    }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                <span>CC01 File</span>
-              </CardTitle>
-              <CardDescription>Upload the CC01 CSV file (.csv)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {cc01File ? (
-                <div className="text-center py-4">
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-green-800">{cc01File.name}</p>
-                      <p className="text-xs text-green-600">File uploaded successfully</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCc01File(null)}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UploadIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                  <label htmlFor="cc01-upload-modal" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">
-                      Click to upload
-                    </span>
-                  </label>
-                  <input
-                    id="cc01-upload-modal"
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileSelect('cc01', file);
-                    }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex justify-end space-x-3 pt-4 border-t">
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirm} 
-            disabled={!riskFile || !nseFile || !cc01File}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            Process Files
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-// ============================================================================
-// Table Component
-// ============================================================================
-interface NseFoTableProps {
-  data: NseFoData[];
-  onUploadClick: () => void;
-}
-
-const NseFoTable: React.FC<NseFoTableProps> = ({ data, onUploadClick }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [actionFilter, setActionFilter] = useState('all');
-  const [amountFilter, setAmountFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 100;
-  const [ninetyAboveFilter, setNinetyAboveFilter] = useState('all');
-
-  // Sorting state
-  const [sortConfig, setSortConfig] = useState<{
-    key: keyof NseFoData | null;
-    direction: 'asc' | 'desc';
-  }>({
-    key: null,
-    direction: 'asc',
-  });
-
-  // Sorting handler
-  const handleSort = (key: keyof NseFoData) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const filteredData = useMemo(() => {
-    const filteredArray = [...data];
-    
-    // Apply sorting if sortConfig is set
-    if (sortConfig.key) {
-      filteredArray.sort((a, b) => {
-        if (a[sortConfig.key!] < b[sortConfig.key!]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (a[sortConfig.key!] > b[sortConfig.key!]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    
-    return filteredArray.filter(item => {
-      const matchesSearch = item.clicode.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesAction = actionFilter === 'all' || item.action === actionFilter;
-      const matchesAmount = amountFilter === 'all' || 
-        (amountFilter === 'high' && Math.abs(item.difference) > 10000) ||
-        (amountFilter === 'medium' && Math.abs(item.difference) > 1000 && Math.abs(item.difference) <= 10000) ||
-        (amountFilter === 'low' && Math.abs(item.difference) <= 1000);
-
-      const matchesNinetyAbove =
-      ninetyAboveFilter === 'all' ||
-      (ninetyAboveFilter === 'above90' &&
-        Number.isFinite(item.ninetyabove) &&
-        item.ninetyabove > 90);
-
-      
-      return matchesSearch && matchesAction && matchesAmount && matchesNinetyAbove;
-    });
-  }, [data, searchQuery, actionFilter, amountFilter, ninetyAboveFilter, sortConfig]);
-
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredData.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredData, currentPage]);
-
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-
-  // Reset pagination on filter change
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, actionFilter, amountFilter, ninetyAboveFilter]);
-
-  const getActionBadge = (action: string) => {
-    if (action === 'U') {
-      return (
-        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-          <TrendingUp className="h-3 w-3 mr-1" />
-          Upgrade
-        </Badge>
-      );
-    } else if (action === 'D') {
-      return (
-        <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
-          <TrendingDown className="h-3 w-3 mr-1" />
-          Downgrade
-        </Badge>
-      );
-    }
-    return <Badge variant="secondary">-</Badge>;
-  };
-
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(num);
-  };
-
-  const exportToCsv = () => {
-    const headers = ['CLICODE', 'Ledger Amount', 'Globe Amount', 'Action', 'Difference', 'ninetyPercentLedger','cc01Margin','shortValue'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredData.map(row => [
-        row.clicode,
-        row.ledgerAmount,
-        row.globeAmount,
-        row.action,
-        row.difference,
-        row.ninetyPercentLedger,
-        row.cc01Margin,
-        row.shortValue
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'nse_fo_analysis.csv';
-    link.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <CardTitle className="flex items-center space-x-2">
-            <span>NSE F&O Analysis Results</span>
-            {filteredData.length > 0 && (
-              <Badge variant="outline" className="ml-2">
-                {filteredData.length} records
-              </Badge>
-            )}
-          </CardTitle>
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-            <Button
-              onClick={exportToCsv}
-              className="bg-green-600 hover:bg-green-700"
-              disabled={data.length === 0}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search CLICODE..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              disabled={data.length === 0}
-            />
-          </div>
-          
-          <Select 
-            value={actionFilter} 
-            onValueChange={setActionFilter}
-            disabled={data.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by Action" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Actions</SelectItem>
-              <SelectItem value="U">Upgrade Only</SelectItem>
-              <SelectItem value="D">Downgrade Only</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={ninetyAboveFilter}
-            onValueChange={setNinetyAboveFilter}
-            disabled={data.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="90% Above Filter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="above90">Above 90 Only</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearchQuery('');
-              setActionFilter('all');
-              setAmountFilter('all');
-              setNinetyAboveFilter('all');
-              setSortConfig({ key: null, direction: 'asc' }); // Reset sorting too
-            }}
-            className="flex items-center"
-            disabled={data.length === 0}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Clear Filters
-          </Button>
-        </div>
-      </CardHeader>
-      
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <button 
-                    onClick={() => handleSort('clicode')}
-                    className="flex items-center font-medium"
-                  >
-                    CLICODE
-                    {sortConfig.key === 'clicode' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('ledgerAmount')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    Ledger Amount
-                    {sortConfig.key === 'ledgerAmount' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('globeAmount')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    Globe Amount
-                    {sortConfig.key === 'globeAmount' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('difference')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    Difference
-                    {sortConfig.key === 'difference' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('cc01Margin')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    CC01 Margin
-                    {sortConfig.key === 'cc01Margin' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('ninetyPercentLedger')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    90% of Ledger
-                    {sortConfig.key === 'ninetyPercentLedger' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('ninetyabove')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    90% above
-                    {sortConfig.key === 'ninetyabove' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <button 
-                    onClick={() => handleSort('shortValue')}
-                    className="flex justify-end w-full items-center font-medium"
-                  >
-                    Short Value
-                    {sortConfig.key === 'shortValue' && (
-                      <span className="ml-1">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-slate-500">
-                    <UploadIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <p className="text-lg font-medium">No data available</p>
-                    <Button 
-                      onClick={onUploadClick}
-                      className="mt-4 bg-blue-600 hover:bg-blue-700"
-                    >
-                      Upload Files
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ) : paginatedData.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-slate-500">
-                    <Search className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <p className="text-lg font-medium">No matching records found</p>
-                    <p className="text-sm mt-2">
-                      Try adjusting your search or filters
-                    </p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedData.map((row, index) => (
-                  <TableRow key={`${row.clicode}-${index}`} className="hover:bg-slate-50">
-                    <TableCell className="font-medium">{row.clicode}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatNumber(row.ledgerAmount)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatNumber(row.globeAmount)}
-                    </TableCell>
-                    <TableCell>{getActionBadge(row.action)}</TableCell>
-                    <TableCell className={`text-right font-mono text-sm font-semibold ${
-                      row.difference > 0 ? 'text-green-600' : row.difference < 0 ? 'text-red-600' : 'text-slate-600'
-                    }`}>
-                      {formatNumber(row.difference)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatNumber(row.cc01Margin)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatNumber(row.ninetyPercentLedger)}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right font-mono text-sm ${
-                        Number.isFinite(row.ninetyabove) && row.ninetyabove > 90
-                          ? 'bg-red-200 font-semibold'
-                          : ''
-                      }`}
-                    >
-                      {formatNumber(row.ninetyabove)}
-                    </TableCell>
-                    <TableCell className={`text-right font-mono text-sm ${
-                      row.shortValue < 0 ? 'text-red-600 font-semibold' : ''
-                    }`}>
-                      {formatNumber(row.shortValue)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-slate-600">
-              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="flex items-center px-3 text-sm text-slate-600">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
+import NseFoUploadModal from '@/components/NseFoBod/NseFoUploadModal';
+import NseFoSummaryCards from '@/components/NseFoBod/NseFoSummaryCards';
 
 // ============================================================================
 // Main Component
 // ============================================================================
 const NseFo: React.FC = () => {
+  // Main state
   const [isProcessing, setIsProcessing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [unallocatedFund, setUnallocatedFund] = useState<number>(0);
@@ -712,6 +28,27 @@ const NseFo: React.FC = () => {
     summary: NseFoSummary;
     outputRecords: NseFoOutputRecord[];
   } | null>(null);
+  
+  // Table state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('all');
+  const [amountFilter, setAmountFilter] = useState('all');
+  const [ninetyAboveFilter, setNinetyAboveFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 100;
+  
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof NseFoData | null;
+    direction: 'asc' | 'desc';
+  }>({
+    key: null,
+    direction: 'asc',
+  });
+  
+  // Editing state
+  const [editingLedger, setEditingLedger] = useState<string | null>(null);
+  const [tempLedgerValue, setTempLedgerValue] = useState<number>(0);
 
   const handleFilesUploaded = async (files: { 
     risk: File | null; 
@@ -763,7 +100,6 @@ const NseFo: React.FC = () => {
       const newFinalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
       const sd = newFinalAmount + 2500000;
       const newNmass = (processedData.summary.negativeShortValue / sd) * 100;
-      
       
       const updatedSummary = {
         ...processedData.summary,
@@ -837,6 +173,234 @@ const NseFo: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  // Sorting handler
+  const handleSort = (key: keyof NseFoData) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Filter and sort table data
+  const filteredData = useMemo(() => {
+    if (!processedData) return [];
+    
+    const data = [...processedData.data];
+    
+    if (sortConfig.key) {
+      data.sort((a, b) => {
+        if (a[sortConfig.key!] < b[sortConfig.key!]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key!] > b[sortConfig.key!]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    
+    return data.filter(item => {
+      const matchesSearch = item.clicode.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesAction = actionFilter === 'all' || item.action === actionFilter;
+      const matchesAmount = amountFilter === 'all' || 
+        (amountFilter === 'high' && Math.abs(item.difference) > 10000) ||
+        (amountFilter === 'medium' && Math.abs(item.difference) > 1000 && Math.abs(item.difference) <= 10000) ||
+        (amountFilter === 'low' && Math.abs(item.difference) <= 1000);
+
+      const matchesNinetyAbove =
+      ninetyAboveFilter === 'all' ||
+      (ninetyAboveFilter === 'above90' &&
+        Number.isFinite(item.ninetyabove) &&
+        item.ninetyabove > 90);
+
+      return matchesSearch && matchesAction && matchesAmount && matchesNinetyAbove;
+    });
+  }, [processedData, searchQuery, actionFilter, amountFilter, ninetyAboveFilter, sortConfig]);
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredData, currentPage]);
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+  // Reset pagination on filter change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, actionFilter, amountFilter, ninetyAboveFilter]);
+
+  const getActionBadge = (action: string) => {
+    if (action === 'U') {
+      return (
+        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+          <TrendingUp className="h-3 w-3 mr-1" />
+          Upgrade
+        </Badge>
+      );
+    } else if (action === 'D') {
+      return (
+        <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
+          <TrendingDown className="h-3 w-3 mr-1" />
+          Downgrade
+        </Badge>
+      );
+    }
+    return <Badge variant="secondary">-</Badge>;
+  };
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(num);
+  };
+
+  const exportToCsv = () => {
+    if (!processedData) return;
+
+    const headers = ['CLICODE', 'Ledger Amount', 'Globe Amount', 'Action', 'Difference', 'ninetyPercentLedger','cc01Margin','shortValue'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredData.map(row => [
+        row.clicode,
+        row.ledgerAmount,
+        row.globeAmount,
+        row.action,
+        row.difference,
+        row.ninetyPercentLedger,
+        row.cc01Margin,
+        row.shortValue
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'nse_fo_analysis.csv';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Handle double-click to start editing
+  const handleDoubleClick = (clicode: string, ledgerAmount: number) => {
+    setEditingLedger(clicode);
+    setTempLedgerValue(ledgerAmount);
+  };
+
+  // Handle ledger amount change during editing
+  const handleLedgerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTempLedgerValue(parseFloat(e.target.value) || 0);
+  };
+
+  // Save edited ledger amount
+  const handleSaveEdit = (clicode: string) => {
+    if (!processedData) return;
+
+    // Find the original row
+    const originalRow = processedData.data.find(row => row.clicode === clicode);
+    if (!originalRow) {
+      toast({
+        title: "Error",
+        description: `Row with CLICODE ${clicode} not found.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const globeAmount = originalRow.globeAmount;
+
+     // Recalculate derived fields
+    const newNinetyPercentLedger = 0.9 * tempLedgerValue;
+    const newNinetyabove = originalRow.cc01Margin > 0 
+      ? (originalRow.cc01Margin / newNinetyPercentLedger) * 100 
+      : 0;
+    const newShortValue = newNinetyPercentLedger - originalRow.cc01Margin;
+    
+    // Explicitly type the action as 'U' | 'D'
+    const newAction: 'U' | 'D' = tempLedgerValue > globeAmount ? 'U' : 'D';
+
+    // Update the specific row
+    const updatedData = processedData.data.map(row => 
+      row.clicode === clicode 
+        ? { 
+            ...row, 
+            ledgerAmount: tempLedgerValue,
+            difference: tempLedgerValue - globeAmount,
+            action: newAction,
+            ninetyPercentLedger: newNinetyPercentLedger,
+            ninetyabove: newNinetyabove,
+            shortValue: newShortValue
+          } 
+        : row
+    );
+
+    // Recalculate totals
+    let upgradeTotal = 0;
+    let downgradeTotal = 0;
+    
+    updatedData.forEach(row => {
+      if (row.action === 'U') {
+        upgradeTotal += Math.abs(row.difference);
+      } else {
+        downgradeTotal += Math.abs(row.difference);
+      }
+    });
+
+    const negativeShortValue = updatedData.reduce((sum, row) => {
+      if (row.shortValue < 0) {
+        return sum + Math.abs(row.shortValue);
+      }
+      return sum;
+    }, 0);
+
+    const netValue = upgradeTotal - downgradeTotal;
+    const finalProFund = processedData.summary.proFund - 2500000;
+    const unallocatedFundAmount = unallocatedFund * 100000;
+    const finalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
+    const sd = finalAmount + 2500000;
+    const newNmass = (negativeShortValue / sd) * 100;
+
+    // Update summary
+    const updatedSummary = {
+      ...processedData.summary,
+      upgradeTotal,
+      downgradeTotal,
+      netValue,
+      finalAmount,
+      negativeShortValue,
+      nmass: newNmass
+    };
+
+    // Update output records
+    const updatedOutputRecords = processedData.outputRecords.map(record => {
+      if (record.clicode === clicode) {
+        return {
+          ...record,
+          amount: tempLedgerValue,
+          action: newAction
+        };
+      }
+      return record;
+    });
+
+    // Update ProFund record
+    const proFundAction: 'U' | 'D' = finalProFund < finalAmount ? 'U' : 'D';
+    updatedOutputRecords[0] = {
+      ...updatedOutputRecords[0],
+      amount: finalAmount,
+      action: proFundAction
+    };
+
+    setProcessedData({
+      data: updatedData,
+      summary: updatedSummary,
+      outputRecords: updatedOutputRecords
+    });
+    setEditingLedger(null);
+  };
+
   if (isProcessing) {
     return (
       <ModernLoading 
@@ -856,160 +420,8 @@ const NseFo: React.FC = () => {
         </p>
       </div>
 
-        {/* Summary Cards - Now 7 cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600 flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Upgrade Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">
-              {processedData 
-                ? `₹${(processedData.summary.upgradeTotal / 100000).toFixed(2)} L` 
-                : '₹0.00 L'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-red-600 flex items-center">
-              <TrendingDown className="h-4 w-4 mr-2" />
-              Downgrade Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-700">
-              {processedData 
-                ? `₹${(processedData.summary.downgradeTotal / 100000).toFixed(2)} L` 
-                : '₹0.00 L'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-600 flex items-center">
-              <DollarSign className="h-4 w-4 mr-2" />
-              Net Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-700">
-              {processedData 
-                ? `₹${(processedData.summary.netValue / 100000).toFixed(2)} L` 
-                : '₹0.00 L'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-purple-600 flex items-center">
-              <Banknote className="h-4 w-4 mr-2" />
-              Pro Fund
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-700">
-              {processedData 
-                ? `₹${(processedData.summary.proFund / 100000).toFixed(2)} L` 
-                : '₹0.00 L'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={
-            processedData?.summary.finalAmount < 0
-              ? "bg-red-600 border-red-1000"
-              : ""
-          }
-        >
-          <CardHeader className="pb-2">
-            <CardTitle
-              className={`text-sm font-medium flex items-center ${
-                processedData?.summary.finalAmount < 0
-                  ? "text-white"
-                  : "text-cyan-600"
-              }`}
-            >
-              <Calculator className="h-4 w-4 mr-2" />
-              Final Amount
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${
-                processedData?.summary.finalAmount < 0
-                  ? "text-white"
-                  : "text-cyan-700"
-              }`}
-            >
-              {processedData
-                ? `₹${(processedData.summary.finalAmount / 100000).toFixed(2)} L`
-                : "₹0.00 L"}
-            </div>
-          </CardContent>
-        </Card>
-        {/* New card for negative short values */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-orange-600 flex items-center">
-              <TrendingDown className="h-4 w-4 mr-2" />
-              Negative Short Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-700">
-              {processedData 
-                ? `₹${(processedData.summary.negativeShortValue / 100000).toFixed(2)} L` 
-                : '₹0.00 L'}
-            </div>
-          </CardContent>
-        </Card>
-        {/* New card for NMASS values */}
-        <Card
-          className={
-            processedData?.summary.nmass < 0
-              ? "bg-red-600 border-red-1000"
-              : ""
-          }
-        >
-          <CardHeader className="pb-2">
-            <CardTitle
-              className={`text-sm font-medium flex items-center ${
-                processedData?.summary.nmass < 0
-                  ? "text-white"
-                  : "text-pink-600"
-              }`}
-            >
-              <Calculator
-                className={`h-4 w-4 mr-2 ${
-                  processedData?.summary.nmass < 0 ? "text-white" : ""
-                }`}
-              />
-              NMASS Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${
-                processedData?.summary.nmass < 0
-                  ? "text-white"
-                  : "text-pink-700"
-              }`}
-            >
-              {processedData
-                ? `${processedData.summary.nmass.toFixed(2)}%`
-                : "0.00%"}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Summary Cards */}
+      <NseFoSummaryCards processedData={processedData} />
 
       {/* Unallocated Fund and Export Section */}
       <Card>
@@ -1088,12 +500,359 @@ const NseFo: React.FC = () => {
       </Card>
 
       {/* Results Section */}
-      <div className="space-y-6">
-        <NseFoTable 
-          data={processedData?.data || []} 
-          onUploadClick={() => setShowUploadModal(true)} 
-        />
-      </div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <CardTitle className="flex items-center space-x-2">
+              <span>NSE F&O Analysis Results</span>
+              {processedData && (
+                <Badge variant="outline" className="ml-2">
+                  {filteredData.length} records
+                </Badge>
+              )}
+            </CardTitle>
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+              <Button
+                onClick={exportToCsv}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={!processedData}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            </div>
+          </div>
+          
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search CLICODE..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                disabled={!processedData}
+              />
+            </div>
+            
+            <Select 
+              value={actionFilter} 
+              onValueChange={setActionFilter}
+              disabled={!processedData}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by Action" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Actions</SelectItem>
+                <SelectItem value="U">Upgrade Only</SelectItem>
+                <SelectItem value="D">Downgrade Only</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={ninetyAboveFilter}
+              onValueChange={setNinetyAboveFilter}
+              disabled={!processedData}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="90% Above Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="above90">Above 90 Only</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery('');
+                setActionFilter('all');
+                setAmountFilter('all');
+                setNinetyAboveFilter('all');
+                setSortConfig({ key: null, direction: 'asc' });
+              }}
+              className="flex items-center"
+              disabled={!processedData}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <button 
+                      onClick={() => handleSort('clicode')}
+                      className="flex items-center font-medium"
+                    >
+                      CLICODE
+                      {sortConfig.key === 'clicode' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('ledgerAmount')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Ledger Amount
+                      {sortConfig.key === 'ledgerAmount' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('globeAmount')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Globe Amount
+                      {sortConfig.key === 'globeAmount' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('difference')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Difference
+                      {sortConfig.key === 'difference' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('cc01Margin')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      CC01 Margin
+                      {sortConfig.key === 'cc01Margin' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('ninetyPercentLedger')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      90% of Ledger
+                      {sortConfig.key === 'ninetyPercentLedger' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('ninetyabove')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      90% above
+                      {sortConfig.key === 'ninetyabove' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('shortValue')}
+                      className="flex justify-end w-full items-center font-medium"
+                    >
+                      Short Value
+                      {sortConfig.key === 'shortValue' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!processedData ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-12 text-slate-500">
+                      <UploadIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                      <p className="text-lg font-medium">No data available</p>
+                      <Button 
+                        onClick={() => setShowUploadModal(true)}
+                        className="mt-4 bg-blue-600 hover:bg-blue-700"
+                      >
+                        Upload Files
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-12 text-slate-500">
+                      <Search className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                      <p className="text-lg font-medium">No matching records found</p>
+                      <p className="text-sm mt-2">
+                        Try adjusting your search or filters
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedData.map((row, index) => (
+                    <TableRow key={`${row.clicode}-${index}`} className="hover:bg-slate-50">
+                      <TableCell className="font-medium">{row.clicode}</TableCell>
+                      
+                      {/* Editable Ledger Amount */}
+                      <TableCell 
+                        className="text-right font-mono text-sm cursor-pointer"
+                        onDoubleClick={() => handleDoubleClick(row.clicode, row.ledgerAmount)}
+                      >
+                        {editingLedger === row.clicode ? (
+                          <div className="flex items-center justify-end">
+                            <Input
+                              type="number"
+                              value={tempLedgerValue}
+                              onChange={handleLedgerChange}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit(row.clicode);
+                                if (e.key === 'Escape') setEditingLedger(null);
+                              }}
+                              className="text-right w-32"
+                              step="0.01"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          formatNumber(row.ledgerAmount)
+                        )}
+                      </TableCell>
+                      
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatNumber(row.globeAmount)}
+                      </TableCell>
+                      
+                      {/* Action (updates during edit) */}
+                      <TableCell>
+                        {editingLedger === row.clicode ? 
+                          getActionBadge(tempLedgerValue > row.globeAmount ? 'U' : 'D')
+                          : getActionBadge(row.action)
+                        }
+                      </TableCell>
+                      
+                      {/* Difference (updates during edit) */}
+                      <TableCell className={`text-right font-mono text-sm font-semibold ${
+                        editingLedger === row.clicode ? 
+                          (tempLedgerValue - row.globeAmount > 0 ? 'text-green-600' : 'text-red-600') 
+                          : (row.difference > 0 ? 'text-green-600' : row.difference < 0 ? 'text-red-600' : 'text-slate-600')
+                      }`}>
+                        {editingLedger === row.clicode ? 
+                          formatNumber(tempLedgerValue - row.globeAmount) 
+                          : formatNumber(row.difference)
+                        }
+                      </TableCell>
+                      
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatNumber(row.cc01Margin)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatNumber(row.ninetyPercentLedger)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-mono text-sm ${
+                          Number.isFinite(row.ninetyabove) && row.ninetyabove > 90
+                            ? 'bg-red-200 font-semibold'
+                            : ''
+                        }`}
+                      >
+                        {formatNumber(row.ninetyabove)}
+                      </TableCell>
+                      <TableCell className={`text-right font-mono text-sm ${
+                        row.shortValue < 0 ? 'text-red-600 font-semibold' : ''
+                      }`}>
+                        {formatNumber(row.shortValue)}
+                      </TableCell>
+                      
+                      {/* Save/Cancel Actions */}
+                      <TableCell>
+                        {editingLedger === row.clicode && (
+                          <div className="flex space-x-2">
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleSaveEdit(row.clicode)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => setEditingLedger(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-slate-600">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="flex items-center px-3 text-sm text-slate-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Upload Modal */}
       <NseFoUploadModal

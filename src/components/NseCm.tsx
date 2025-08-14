@@ -1,43 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription 
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Banknote, 
-  Calculator, 
-  Download, 
-  Settings, 
-  Edit,
-  Search,
-  Filter,
-  FileSpreadsheet,
-  Upload,
-  X
-} from 'lucide-react';
-import { 
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table';
+import { Edit, Search, Filter, Download, Settings, Upload, Save, X } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { processNseCmFiles, NseCmData, NseCmSummary, NseCmOutputRecord } from '@/utils/nseCmProcessor';
 import ModernLoading from './ModernLoading';
+import NseCmSummaryCards from '@/components/NseCmBod/NseCmSummaryCards';
+import NseCmUploadModal from '@/components/NseCmBod/NseCmUploadModal';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 
 const NseCm: React.FC = () => {
   // Main component state
@@ -51,6 +26,10 @@ const NseCm: React.FC = () => {
     summary: NseCmSummary;
     outputRecords: NseCmOutputRecord[];
   } | null>(null);
+  
+  // Editing state
+  const [editingLedger, setEditingLedger] = useState<string | null>(null);
+  const [tempLedgerValue, setTempLedgerValue] = useState<number>(0);
 
   // Table state
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,6 +78,103 @@ const NseCm: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Handle double-click to start editing
+  const handleDoubleClick = (clicode: string, ledgerAmount: number) => {
+    setEditingLedger(clicode);
+    setTempLedgerValue(ledgerAmount);
+  };
+
+  // Handle ledger amount change during editing
+  const handleLedgerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTempLedgerValue(parseFloat(e.target.value) || 0);
+  };
+
+  // Save edited ledger amount
+  const handleSaveEdit = (clicode: string) => {
+    if (!processedData) return;
+
+    // Find the original row
+    const originalRow = processedData.data.find(row => row.clicode === clicode);
+    if (!originalRow) {
+      toast({
+        title: "Error",
+        description: `Row with CLICODE ${clicode} not found.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const globeAmount = originalRow.globeAmount;
+  
+    // Explicitly type the action as 'U' | 'D'
+    const newAction: 'U' | 'D' = tempLedgerValue > globeAmount ? 'U' : 'D';
+
+    // Update the specific row
+    const updatedData = processedData.data.map(row => 
+      row.clicode === clicode 
+        ? { 
+            ...row, 
+            ledgerAmount: tempLedgerValue,
+            difference: tempLedgerValue - globeAmount,
+            action: newAction
+          } 
+        : row
+    );
+
+    // Recalculate totals
+    let upgradeTotal = 0;
+    let downgradeTotal = 0;
+    
+    updatedData.forEach(row => {
+      if (row.action === 'U') {
+        upgradeTotal += Math.abs(row.difference);
+      } else {
+        downgradeTotal += Math.abs(row.difference);
+      }
+    });
+
+    const netValue = upgradeTotal - downgradeTotal;
+    const finalProFund = processedData.summary.proFund - 8000000;
+    const unallocatedFundAmount = unallocatedFund * 100000;
+    const finalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
+
+    // Update summary
+    const updatedSummary = {
+      ...processedData.summary,
+      upgradeTotal,
+      downgradeTotal,
+      netValue,
+      finalAmount
+    };
+
+    // Update output records
+    const updatedOutputRecords = processedData.outputRecords.map(record => {
+      if (record.clicode === clicode) {
+        return {
+          ...record,
+          amount: tempLedgerValue,
+          action: newAction
+        };
+      }
+      return record;
+    });
+
+    // Update ProFund record
+    const proFundAction: 'U' | 'D' = finalProFund < finalAmount ? 'U' : 'D';
+    updatedOutputRecords[0] = {
+      ...updatedOutputRecords[0],
+      amount: finalAmount,
+      action: proFundAction
+    };
+
+    setProcessedData({
+      data: updatedData,
+      summary: updatedSummary,
+      outputRecords: updatedOutputRecords
+    });
+    setEditingLedger(null);
   };
 
   // Update unallocated fund
@@ -248,15 +324,19 @@ const NseCm: React.FC = () => {
     if (action === 'U') {
       return (
         <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-          <TrendingUp className="h-3 w-3 mr-1" />
-          Upgrade
+          <span className="flex items-center">
+            <TrendingUp className="h-3 w-3 mr-1" />
+            Upgrade
+          </span>
         </Badge>
       );
     } else if (action === 'D') {
       return (
         <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
-          <TrendingDown className="h-3 w-3 mr-1" />
-          Downgrade
+          <span className="flex items-center">
+            <TrendingDown className="h-3 w-3 mr-1" />
+            Downgrade
+          </span>
         </Badge>
       );
     }
@@ -344,100 +424,13 @@ const NseCm: React.FC = () => {
         </p>
       </div>
 
-      {/* Summary Cards - Always Visible */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600 flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Upgrade Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">
-              ₹{(processedData ? (processedData.summary.upgradeTotal / 100000).toFixed(2) : '0.00')} L
-            </div>
-          </CardContent>
-        </Card>
+      {/* Summary Cards */}
+      <NseCmSummaryCards 
+        processedData={processedData} 
+        unallocatedFund={unallocatedFund} 
+      />
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-red-600 flex items-center">
-              <TrendingDown className="h-4 w-4 mr-2" />
-              Downgrade Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-700">
-              ₹{(processedData ? (processedData.summary.downgradeTotal / 100000).toFixed(2) : '0.00')} L
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-600 flex items-center">
-              <DollarSign className="h-4 w-4 mr-2" />
-              Net Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-700">
-              ₹{(processedData ? (processedData.summary.netValue / 100000).toFixed(2) : '0.00')} L
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-purple-600 flex items-center">
-              <Banknote className="h-4 w-4 mr-2" />
-              Pro Fund
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-700">
-              ₹{(processedData ? (processedData.summary.proFund / 100000).toFixed(2) : '0.00')} L
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={
-            processedData?.summary.finalAmount < 0
-              ? "bg-red-600 border-red-1000"
-              : ""
-          }
-        >
-          <CardHeader className="pb-2">
-            <CardTitle
-              className={`text-sm font-medium flex items-center ${
-                processedData?.summary.finalAmount < 0
-                  ? "text-white"
-                  : "text-cyan-600"
-              }`}
-            >
-              <Calculator className="h-4 w-4 mr-2" />
-              Final Amount
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${
-                processedData?.summary.finalAmount < 0
-                  ? "text-white"
-                  : "text-cyan-700"
-              }`}
-            >
-              {processedData
-                ? `₹${(processedData.summary.finalAmount / 100000).toFixed(2)} L`
-                : "₹0.00 L"}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Unallocated Fund and Export Section - Always Visible */}
+      {/* Unallocated Fund and Export Section */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between space-y-4 lg:space-y-0">
@@ -516,7 +509,7 @@ const NseCm: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Results Section - Always Visible */}
+      {/* Results Section */}
       <Card>
         <CardHeader>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
@@ -540,7 +533,7 @@ const NseCm: React.FC = () => {
             </div>
           </div>
           
-          {/* Filters - Always Visible */}
+          {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -590,7 +583,7 @@ const NseCm: React.FC = () => {
                 setSearchQuery('');
                 setActionFilter('all');
                 setAmountFilter('all');
-                setSortConfig({ key: null, direction: 'asc' }); // Reset sorting too
+                setSortConfig({ key: null, direction: 'asc' });
               }}
               className="flex items-center"
               disabled={!processedData || isProcessing}
@@ -659,12 +652,13 @@ const NseCm: React.FC = () => {
                       )}
                     </button>
                   </TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {!processedData ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12">
+                    <TableCell colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <div className="bg-gray-100 p-4 rounded-full">
                           <Upload className="h-8 w-8 text-gray-500" />
@@ -684,7 +678,7 @@ const NseCm: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">
                       <div className="flex flex-col items-center">
                         <Search className="h-10 w-10 text-slate-400 mb-4" />
                         <p className="font-medium">No records found</p>
@@ -698,17 +692,76 @@ const NseCm: React.FC = () => {
                   paginatedData.map((row, index) => (
                     <TableRow key={`${row.clicode}-${index}`} className="hover:bg-slate-50">
                       <TableCell className="font-medium">{row.clicode}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatNumber(row.ledgerAmount)}
+                      
+                      {/* Editable Ledger Amount */}
+                      <TableCell 
+                        className="text-right font-mono text-sm cursor-pointer"
+                        onDoubleClick={() => handleDoubleClick(row.clicode, row.ledgerAmount)}
+                      >
+                        {editingLedger === row.clicode ? (
+                          <div className="flex items-center justify-end">
+                            <Input
+                              type="number"
+                              value={tempLedgerValue}
+                              onChange={handleLedgerChange}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit(row.clicode);
+                                if (e.key === 'Escape') setEditingLedger(null);
+                              }}
+                              className="text-right w-32"
+                              step="0.01"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          formatNumber(row.ledgerAmount)
+                        )}
                       </TableCell>
+                      
                       <TableCell className="text-right font-mono text-sm">
                         {formatNumber(row.globeAmount)}
                       </TableCell>
-                      <TableCell>{getActionBadge(row.action)}</TableCell>
+                      
+                      {/* Action (updates during edit) */}
+                      <TableCell>
+                        {editingLedger === row.clicode ? 
+                          getActionBadge(tempLedgerValue > row.globeAmount ? 'U' : 'D')
+                          : getActionBadge(row.action)
+                        }
+                      </TableCell>
+                      
+                      {/* Difference (updates during edit) */}
                       <TableCell className={`text-right font-mono text-sm font-semibold ${
-                        row.difference > 0 ? 'text-green-600' : row.difference < 0 ? 'text-red-600' : 'text-slate-600'
+                        editingLedger === row.clicode ? 
+                          (tempLedgerValue - row.globeAmount > 0 ? 'text-green-600' : 'text-red-600') 
+                          : (row.difference > 0 ? 'text-green-600' : row.difference < 0 ? 'text-red-600' : 'text-slate-600')
                       }`}>
-                        {formatNumber(row.difference)}
+                        {editingLedger === row.clicode ? 
+                          formatNumber(tempLedgerValue - row.globeAmount) 
+                          : formatNumber(row.difference)
+                        }
+                      </TableCell>
+                      
+                      {/* Save/Cancel Actions */}
+                      <TableCell>
+                        {editingLedger === row.clicode && (
+                          <div className="flex space-x-2">
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleSaveEdit(row.clicode)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => setEditingLedger(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -750,181 +803,19 @@ const NseCm: React.FC = () => {
       </Card>
 
       {/* Upload Modal */}
-      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="max-w-6xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Upload className="h-5 w-5 text-blue-600" />
-              <span>Upload Files for NSE CM Analysis</span>
-            </DialogTitle>
-            <DialogDescription>
-              Upload Risk Excel file, NSE Globe file, and NRI Excel file to process NSE CM data.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
-            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                  <span>Risk File</span>
-                </CardTitle>
-                <CardDescription>Upload the Risk Excel file (.xlsx)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {riskFile ? (
-                  <div className="text-center py-4">
-                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-green-800">{riskFile.name}</p>
-                        <p className="text-xs text-green-600">File uploaded successfully</p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRiskFile(null)}
-                        className="text-green-600 hover:text-green-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <label htmlFor="risk-upload-modal" className="cursor-pointer">
-                      <span className="text-blue-600 hover:text-blue-700 font-medium">
-                        Click to upload
-                      </span>
-                    </label>
-                    <input
-                      id="risk-upload-modal"
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileSelect('risk', file);
-                      }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileSpreadsheet className="h-5 w-5 text-green-600" />
-                  <span>NSE Globe File</span>
-                </CardTitle>
-                <CardDescription>Upload the NSE Globe CSV file (.csv)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {nseFile ? (
-                  <div className="text-center py-4">
-                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-green-800">{nseFile.name}</p>
-                        <p className="text-xs text-green-600">File uploaded successfully</p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setNseFile(null)}
-                        className="text-green-600 hover:text-green-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <label htmlFor="nse-upload-modal" className="cursor-pointer">
-                      <span className="text-blue-600 hover:text-blue-700 font-medium">
-                        Click to upload
-                      </span>
-                    </label>
-                    <input
-                      id="nse-upload-modal"
-                      type="file"
-                      accept=".csv"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileSelect('nse', file);
-                      }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                  <span>NRI File</span>
-                </CardTitle>
-                <CardDescription>Upload the NRI Excel file (.xlsx)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {nriFile ? (
-                  <div className="text-center py-4">
-                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-green-800">{nriFile.name}</p>
-                        <p className="text-xs text-green-600">File uploaded successfully</p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setNriFile(null)}
-                        className="text-green-600 hover:text-green-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                    <label htmlFor="nri-upload-modal" className="cursor-pointer">
-                      <span className="text-blue-600 hover:text-blue-700 font-medium">
-                        Click to upload
-                      </span>
-                    </label>
-                    <input
-                      id="nri-upload-modal"
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileSelect('nri', file);
-                      }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button variant="outline" onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirm} 
-              disabled={!riskFile || !nseFile || !nriFile}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              Process Files
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <NseCmUploadModal 
+        showUploadModal={showUploadModal}
+        setShowUploadModal={setShowUploadModal}
+        riskFile={riskFile}
+        nseFile={nseFile}
+        nriFile={nriFile}
+        setRiskFile={setRiskFile}
+        setNseFile={setNseFile}
+        setNriFile={setNriFile}
+        handleFileSelect={handleFileSelect}
+        handleConfirm={handleConfirm}
+        handleCancel={handleCancel}
+      />
     </div>
   );
 };
