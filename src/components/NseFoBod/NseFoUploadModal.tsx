@@ -83,9 +83,9 @@ const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                <span>Risk File</span>
+                <span>Ledger</span>
               </CardTitle>
-              <CardDescription>Upload the Risk Excel file (.xlsx)</CardDescription>
+              <CardDescription>Ledger DDMMYYYY (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {riskFile ? (
@@ -181,9 +181,9 @@ const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                <span>CC01 File</span>
+                <span>NMASS or CC01 File</span>
               </CardTitle>
-              <CardDescription>Upload the CC01 CSV file (.csv)</CardDescription>
+              <CardDescription>Upload NMASS .xlsx or CC01 CSV file (.csv)</CardDescription>
             </CardHeader>
             <CardContent>
               {cc01File ? (

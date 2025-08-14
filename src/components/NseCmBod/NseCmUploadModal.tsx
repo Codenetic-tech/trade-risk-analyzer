@@ -65,9 +65,9 @@ const NseCmUploadModal: React.FC<NseCmUploadModalProps> = ({
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                <span>Risk File</span>
+                <span>Ledger</span>
               </CardTitle>
-              <CardDescription>Upload the Risk Excel file (.xlsx)</CardDescription>
+              <CardDescription>Ledger DDMMYYYY (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {riskFile ? (
