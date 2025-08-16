@@ -14,6 +14,7 @@ import NseCm from './components/NseCm';
 import Layout from './components/Layout';
 import NseFo from './components/NseFo';
 import Payout from './components/payout';
+import Mcx from './components/Mcx';
 
 const queryClient = new QueryClient();
 
@@ -117,10 +118,7 @@ const AppContent = () => {
           path="/morning-bod/mcx" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">MCX</h2>
-                <p className="text-slate-500 mt-2">MCX analysis coming soon...</p>
-              </div>
+              <Mcx />
             </ProtectedRoute>
           } 
         />
