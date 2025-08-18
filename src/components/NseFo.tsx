@@ -168,7 +168,7 @@ const NseFo: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `90221_ALLOC_${dateString}.T0001`;
+    link.download = `90221_ALLOC_${dateString}.T0002`;
     link.click();
     window.URL.revokeObjectURL(url);
   };

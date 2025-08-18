@@ -83,9 +83,9 @@ const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                <span>Ledger</span>
+                <span>Risk File</span>
               </CardTitle>
-              <CardDescription>Ledger DDMMYYYY (.xlsx)</CardDescription>
+              <CardDescription>Upload the Risk Excel file (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {riskFile ? (
@@ -181,9 +181,9 @@ const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                <span>NMASS or CC01 File</span>
+                <span>CC01 / NMASS File</span>
               </CardTitle>
-              <CardDescription>Upload NMASS .xlsx or CC01 CSV file (.csv)</CardDescription>
+              <CardDescription>Upload CC01 (.CSV) or ClientMargin (.CSV) file</CardDescription>
             </CardHeader>
             <CardContent>
               {cc01File ? (
@@ -214,7 +214,7 @@ const NseFoUploadModal: React.FC<NseFoUploadProps> = ({
                   <input
                     id="cc01-upload-modal"
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];

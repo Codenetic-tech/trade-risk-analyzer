@@ -157,6 +157,52 @@ const parseExcel = async (file: File): Promise<any[]> => {
   });
 };
 
+// Update ClientMargin CSV parser to match your file format
+const parseClientMarginCSVText = (csvText: string): {[key: string]: number} => {
+  const lines = csvText.split('\n').filter(line => line.trim() !== '');
+  if (lines.length < 1) return {};
+
+  const headers = lines[0].split(',').map(h => h.trim());
+  
+  // Find indices using more flexible matching
+  const clientCodeIndex = headers.findIndex(h => 
+    h.toLowerCase().includes('client') && h.toLowerCase().includes('code')
+  );
+  
+  const totalMarginIndex = headers.findIndex(h => 
+    h.toLowerCase().includes('total') && h.toLowerCase().includes('margin')
+  );
+
+  if (clientCodeIndex === -1 || totalMarginIndex === -1) {
+    console.error('CSV Headers:', headers);
+    throw new Error('Required columns (Client Code and Total Margin) not found in CSV');
+  }
+
+  const marginMap: {[key: string]: number} = {};
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    const values = line.split(',').map(v => v.trim());
+    if (values.length <= Math.max(clientCodeIndex, totalMarginIndex)) continue;
+    
+    const clientCode = values[clientCodeIndex];
+    // Skip summary rows and empty client codes
+    if (!clientCode || clientCode === 'Total' || clientCode === 'All amounts in Rs.') continue;
+    
+    // Handle potential currency formatting in total margin
+    let marginValue = 0;
+    const marginStr = values[totalMarginIndex].replace(/[^\d.-]/g, '');
+    if (marginStr) {
+      marginValue = parseFloat(marginStr);
+    }
+    
+    marginMap[clientCode] = marginValue;
+  }
+
+  return marginMap;
+};
+
 export const processNseFoFiles = async (files: {
   risk: File | null;
   nse: File | null;
@@ -176,22 +222,32 @@ export const processNseFoFiles = async (files: {
     const nseData = parseNSECSV(nseText);
     console.log('NSE data:', nseData);
     
-    // Process CC01 file
-    const cc01Text = await files.cc01.text();
-    const cc01Lines = cc01Text.split('\n');
-    const cc01MarginMap: {[key: string]: number} = {};
+    // Process CC01/ClientMargin file - handle both formats
+    let cc01MarginMap: {[key: string]: number} = {};
+    const cc01FileName = files.cc01.name.toLowerCase();
     
-    for (const line of cc01Lines) {
-      if (!line.trim()) continue;
-      const values = line.split(',');
-      if (values.length >= 6) {
-        const ucc = values[0].trim();
-        const margin = parseFloat(values[5]) || 0;
-        if (ucc) {
-          cc01MarginMap[ucc] = margin;
+    if (cc01FileName.includes('clientmargin')) {
+      // Process as ClientMargin CSV file
+      const cc01Text = await files.cc01.text();
+      cc01MarginMap = parseClientMarginCSVText(cc01Text);
+    } else {
+      // Process as CC01 CSV file (original format)
+      const cc01Text = await files.cc01.text();
+      const cc01Lines = cc01Text.split('\n');
+      
+      for (const line of cc01Lines) {
+        if (!line.trim()) continue;
+        const values = line.split(',');
+        if (values.length >= 6) {
+          const ucc = values[0].trim();
+          const margin = parseFloat(values[5]) || 0;
+          if (ucc) {
+            cc01MarginMap[ucc] = margin;
+          }
         }
       }
     }
+
     console.log('CC01 Margin Map:', cc01MarginMap);
     
     // Process NSE data
@@ -378,7 +434,7 @@ export const processNseFoFiles = async (files: {
     };
 
     // 3. Add ProFund record
-    const proFundAction: 'U' | 'D' = finalProFund < finalAmount ? 'U' : 'D';
+    const proFundAction: 'U' | 'D' = proFund < finalAmount ? 'U' : 'D';
     
     outputRecords.unshift({
       currentDate,
