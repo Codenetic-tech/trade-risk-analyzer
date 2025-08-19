@@ -198,12 +198,92 @@ const parseMrgFile = (mrgText: string): {[key: string]: number} => {
   return marginMap;
 };
 
+const parseSearchResultsExcel = async (file: File): Promise<{ [key: string]: number }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+          header: 1,
+          defval: "",
+          blankrows: false
+        });
+
+        // Find header row by searching for "Client Code" column
+        let headerRowIndex = -1;
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (row && row.some(cell => 
+            String(cell).toLowerCase().includes('client code')
+          )) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          throw new Error('Could not find header row with "Client Code"');
+        }
+
+        const headerRow = jsonData[headerRowIndex].map(cell => String(cell).trim().toLowerCase());
+        
+        // Get column indices
+        const clientCodeIndex = headerRow.findIndex(h => 
+          h.includes('client code')
+        );
+        const totalMUIndex = headerRow.findIndex(h => 
+          h.includes('total mu (rs)')
+        );
+
+        if (clientCodeIndex === -1 || totalMUIndex === -1) {
+          throw new Error('Required columns (Client Code, Total MU (Rs)) not found');
+        }
+
+        console.log('Header row found at index:', headerRowIndex);
+        console.log('Client Code Index:', clientCodeIndex);
+        console.log('Total MU Index:', totalMUIndex);
+
+        const marginMap: { [key: string]: number } = {};
+        
+        // Process rows starting from headerRowIndex + 1
+        for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (!row || row.length < Math.max(clientCodeIndex, totalMUIndex)) continue;
+          
+          const ucc = row[clientCodeIndex] ? String(row[clientCodeIndex]).trim() : '';
+          const totalMU = row[totalMUIndex] ? String(row[totalMUIndex]).trim() : '0';
+
+          if (!ucc || ucc === 'undefined' || ucc === '#N/A') continue;
+          
+          // Clean and parse the margin value
+          const cleanTotalMU = totalMU.replace(/[^\d.-]/g, '');
+          const marginValue = parseFloat(cleanTotalMU) || 0;
+          
+          marginMap[ucc] = marginValue;
+        }
+        
+        resolve(marginMap);
+      } catch (error) {
+        console.error('Error parsing SearchResults Excel:', error);
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read Excel file'));
+    reader.readAsArrayBuffer(file);
+  });
+};
+
 export const processMcxFiles = async (files: {
   risk: File | null;
   globe: File | null;
-  mrg: File | null;
+  marginData: File | null;
 }, unallocatedFund: number = 0): Promise<{ data: McxFoData[]; summary: McxFoSummary; outputRecords: McxFoOutputRecord[] }> => {
-  if (!files.risk || !files.globe || !files.mrg) {
+  if (!files.risk || !files.globe || (!files.marginData)) {
     throw new Error('All files (Risk, Globe, MRG) are required');
   }
 
@@ -226,9 +306,26 @@ export const processMcxFiles = async (files: {
     
     // Process MRG file
     console.log('Processing MRG file...');
-    const mrgText = await files.mrg.text();
+    const mrgText = await files.marginData.text();
     console.log('MRG file sample:', mrgText.substring(0, 200));
-    const marginMap = parseMrgFile(mrgText);
+     let marginMap: { [key: string]: number } = {};
+  if (files.marginData) {
+    const fileName = files.marginData.name.toLowerCase();
+    
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      // Excel file (SearchResults)
+      marginMap = await parseSearchResultsExcel(files.marginData);
+    } else if (fileName.endsWith('.csv')) {
+      // CSV file (MRG)
+      const mrgText = await files.marginData.text();
+      marginMap = parseMrgFile(mrgText);
+    } else {
+      throw new Error('Unsupported margin file format');
+    }
+  } else {
+    throw new Error('Margin data file is required');
+  }
+    
     console.log('Margin records:', Object.keys(marginMap).length);
     console.log('Sample margin data:', Object.entries(marginMap).slice(0, 5));
 

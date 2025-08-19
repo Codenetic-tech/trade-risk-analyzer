@@ -334,12 +334,26 @@ const EveningIntersegment: React.FC = () => {
       const collateralTotal = row.CollateralTotal;
       
       let nseAmount;
+      if (collateralTotal > 0) {
+      // Updated collateral client logic
+      if (marginUsed < collateralTotal) {
+        nseAmount = Math.round((cash + payin) * 0.01);
+      } else {
+        const newValue = marginUsed - collateralTotal;
+        if (newValue > 0) {
+          nseAmount = newValue + (row.AvailableMargin * 0.01);
+        } else {
+          nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
+        }
+      }
+    } else {
+      // Existing non-collateral logic
       if ((cash + payin) < marginUsed) {
         nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
       } else {
-        // Updated calculation: 1% margin + margin used
         nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
       }
+    }
       
       return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(nseAmount)},,,,,,,D`;
     }).join('\n');
@@ -362,7 +376,7 @@ const EveningIntersegment: React.FC = () => {
     // Get date for filename (DDMMYYYY)
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: use getMonth() instead of getDate()
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
@@ -373,9 +387,33 @@ const EveningIntersegment: React.FC = () => {
       year: 'numeric'
     }).replace(/ /g, '-');
 
-    const mcxContent = processedData.map(row => 
-      `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(row.margin99)},,,,,,,A`
-    ).join('\n');
+    // Map each row to MCX entry
+    const mcxContent = processedData.map(row => {
+      const cash = row.Cash;
+      const payin = row.Payin;
+      const marginUsed = row.MarginUsed;
+      const collateralTotal = row.CollateralTotal;
+      
+      let mcxAmount;
+      
+      if (collateralTotal > 0) {
+        if (marginUsed < collateralTotal) {
+          mcxAmount = Math.round((cash + payin) * 0.99);
+        } else {
+          const newValue = marginUsed - collateralTotal;
+          if (newValue > 0) {
+            mcxAmount = Math.round((cash + payin - newValue) * 0.99);
+          } else {
+            mcxAmount = row.margin99;
+          }
+        }
+      } else {
+        mcxAmount = row.margin99;
+      }
+
+      // Return formatted row
+      return `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(mcxAmount)},,,,,,,A`;
+    }).join('\n');
 
     const profundEntry = `${currentDate},CO,8090,46365,,,P,${Math.round(mcxProfundAmount)},,,,,,,A`;
 
@@ -386,7 +424,7 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `MCCLCOLL_46365_${dateString}.010`;  // Updated filename format
+    link.download = `MCCLCOLL_46365_${dateString}.010`;
     link.click();
     window.URL.revokeObjectURL(url);
   };

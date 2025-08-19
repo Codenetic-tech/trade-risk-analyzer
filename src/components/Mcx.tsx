@@ -24,11 +24,34 @@ const Mcx: React.FC = () => {
   const [unallocatedFund, setUnallocatedFund] = useState<number>(0);
   const [tempUnallocatedFund, setTempUnallocatedFund] = useState<number>(0);
   const [isEditingUnallocated, setIsEditingUnallocated] = useState(false);
+  const [mcxProfundInput, setMcxProfundInput] = useState<string>("35");
+
+  const mcxProfundAmount = useMemo(() => {
+    const value = parseFloat(mcxProfundInput);
+    return isNaN(value) ? 3500000 : Math.round(value * 100000);
+  }, [mcxProfundInput]);
+  
   const [processedData, setProcessedData] = useState<{
     data: McxFoData[];
     summary: McxFoSummary;
     outputRecords: McxFoOutputRecord[];
   } | null>(null);
+
+    React.useEffect(() => {
+    if (processedData) {
+      const newNmass = (processedData.summary.negativeShortValue / mcxProfundAmount) * 100;
+      setProcessedData(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          summary: {
+            ...prev.summary,
+            nmass: newNmass
+          }
+        };
+      });
+    }
+  }, [mcxProfundAmount, processedData]);
   
   // Table state
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +77,7 @@ const Mcx: React.FC = () => {
   const handleFilesUploaded = async (files: { 
     risk: File | null; 
     globe: File | null; 
-    mrg: File | null; 
+    marginData: File | null;
   }) => {
     setIsProcessing(true);
     setShowUploadModal(false);
@@ -63,10 +86,20 @@ const Mcx: React.FC = () => {
       const result = await processMcxFiles({
         risk: files.risk,
         globe: files.globe,
-        mrg: files.mrg
+        marginData: files.marginData
       }, unallocatedFund);
-      
-      setProcessedData(result);
+
+      // Recalculate nmass with current mcxProfundAmount
+      const recalculatedSummary = {
+        ...result.summary,
+        nmass: (result.summary.negativeShortValue / mcxProfundAmount) * 100
+      };
+          
+      setProcessedData({
+      data: result.data,
+      summary: recalculatedSummary,
+      outputRecords: result.outputRecords
+    });
       
       toast({
         title: "Processing Complete",
@@ -75,7 +108,7 @@ const Mcx: React.FC = () => {
     } catch (error) {
       toast({
         title: "Processing Error",
-        description: "Failed to process files. Please check file formats and try again.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -98,7 +131,7 @@ const Mcx: React.FC = () => {
       const unallocatedFundAmount = tempUnallocatedFund * 100000;
       const newFinalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
       const sd = newFinalAmount + 3010000;
-      const newNmass = (processedData.summary.negativeShortValue / sd) * 100;
+      const newNmass = (processedData.summary.negativeShortValue / mcxProfundAmount) * 100;
       
       const updatedSummary = {
         ...processedData.summary,
@@ -107,12 +140,12 @@ const Mcx: React.FC = () => {
       };
       
       const proFundAction: 'A' | 'D' = finalProFund < 0 ? 'A' : 'D';
-      
+
       const updatedOutputRecords = processedData.outputRecords.map((record, index) => {
         if (index === 0 && record.accountType === 'P') {
           return { 
             ...record, 
-            amount: newFinalAmount,
+            amount: finalProFund < 0 ? Math.abs(finalProFund) : finalProFund,
             action: proFundAction
           };
         }
@@ -359,7 +392,7 @@ const Mcx: React.FC = () => {
     const unallocatedFundAmount = unallocatedFund * 100000;
     const finalAmount = parseFloat(((finalProFund - netValue + unallocatedFundAmount) - 1000).toFixed(2));
     const sd = finalAmount + 3010000;
-    const newNmass = (negativeShortValue / sd) * 100;
+    const newNmass = (negativeShortValue / mcxProfundAmount) * 100;
 
     // Update summary
     const updatedSummary = {
@@ -388,7 +421,7 @@ const Mcx: React.FC = () => {
     const proFundAction: 'A' | 'D' = finalProFund < 0 ? 'A' : 'D';
     updatedOutputRecords[0] = {
       ...updatedOutputRecords[0],
-      amount: finalAmount,
+      amount: finalProFund,
       action: proFundAction
     };
 
@@ -479,6 +512,24 @@ const Mcx: React.FC = () => {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+              {/* MCX Profund Input - Moved here */}
+              {filteredData.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center">
+                    <span className="mr-2 font-medium text-yellow-700">MCX Pro</span>
+                    <input
+                      type="text"
+                      value={mcxProfundInput}
+                      onChange={(e) => setMcxProfundInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                      className="w-20 p-2 border border-yellow-300 rounded-md text-center font-mono"
+                      placeholder="15"
+                    />
+                  </div>
+                  <div className="text-sm text-yellow-700 font-mono bg-yellow-100 px-2 py-1 rounded">
+                    = ₹{new Intl.NumberFormat('en-IN').format(mcxProfundAmount)}
+                  </div>
+                </div>
+              )}
               <Button
                 onClick={exportOutputFile}
                 className="bg-green-600 hover:bg-green-700"
@@ -510,7 +561,9 @@ const Mcx: React.FC = () => {
                 </Badge>
               )}
             </CardTitle>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+            
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              {/* Export CSV Button */}
               <Button
                 onClick={exportToCsv}
                 className="bg-green-600 hover:bg-green-700"
