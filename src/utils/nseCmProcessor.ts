@@ -157,7 +157,7 @@ const parseExcel = async (file: File): Promise<any[]> => {
 };
 
 // Helper function to parse NRI Excel file
-const parseNriExcel = async (file: File): Promise<string[]> => {
+/*const parseNriExcel = async (file: File): Promise<string[]> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -199,16 +199,19 @@ const parseNriExcel = async (file: File): Promise<string[]> => {
     reader.onerror = () => reject(new Error('Failed to read NRI Excel file'));
     reader.readAsArrayBuffer(file);
   });
-};
+};*/
 
 export const processNseCmFiles = async (files: {
   risk: File | null;
   nse: File | null;
-  nri: File | null;
 }, unallocatedFund: number = 0): Promise<{ data: NseCmData[]; summary: NseCmSummary; outputRecords: NseCmOutputRecord[] }> => {
-  if (!files.risk || !files.nse || !files.nri) {
-    throw new Error('All files (Risk, NSE, NRI) are required');
+  if (!files.risk || !files.nse) {
+    throw new Error('Risk and NSE files are required');
   }
+
+  // Hardcoded NRI client codes
+  const nriExcludeCodes = ['SKY20400', 'SKY20388', 'SKY20218', 'SKY20421'];
+  console.log('Using hardcoded NRI exclude codes:', nriExcludeCodes);
 
   try {
     // Process Risk Excel file
@@ -247,8 +250,8 @@ export const processNseCmFiles = async (files: {
     console.log('ProFund:', proFund);
 
     // Process NRI Excel file to get excluded codes
-    const nriExcludeCodes = await parseNriExcel(files.nri);
-    console.log('NRI exclude codes:', nriExcludeCodes);
+    //const nriExcludeCodes = await parseNriExcel(files.nri);
+    //console.log('NRI exclude codes:', nriExcludeCodes);
 
     // Process each record
     const processedData: NseCmData[] = [];

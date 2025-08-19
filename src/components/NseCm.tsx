@@ -50,13 +50,11 @@ const NseCm: React.FC = () => {
   // Modal state
   const [riskFile, setRiskFile] = useState<File | null>(null);
   const [nseFile, setNseFile] = useState<File | null>(null);
-  const [nriFile, setNriFile] = useState<File | null>(null);
 
   // Handle file upload
   const handleFilesUploaded = async (files: { 
     risk: File | null; 
     nse: File | null; 
-    nri: File | null; 
   }) => {
     setIsProcessing(true);
     setShowUploadModal(false);
@@ -377,23 +375,17 @@ const NseCm: React.FC = () => {
   };
 
   // Handle file selection in modal
-  const handleFileSelect = (type: 'risk' | 'nse' | 'nri', file: File) => {
-    if (type === 'risk') {
-      setRiskFile(file);
-    } else if (type === 'nse') {
-      setNseFile(file);
-    } else {
-      setNriFile(file);
-    }
+   const handleFileSelect = (type: 'risk' | 'nse', file: File) => {
+    if (type === 'risk') setRiskFile(file);
+    else setNseFile(file);
   };
 
   // Handle modal confirmation
   const handleConfirm = () => {
-    handleFilesUploaded({ risk: riskFile, nse: nseFile, nri: nriFile });
+    handleFilesUploaded({ risk: riskFile, nse: nseFile });
     setShowUploadModal(false);
     setRiskFile(null);
     setNseFile(null);
-    setNriFile(null);
   };
 
   // Handle modal cancellation
@@ -401,7 +393,6 @@ const NseCm: React.FC = () => {
     setShowUploadModal(false);
     setRiskFile(null);
     setNseFile(null);
-    setNriFile(null);
   };
 
   // Loading state
@@ -808,10 +799,8 @@ const NseCm: React.FC = () => {
         setShowUploadModal={setShowUploadModal}
         riskFile={riskFile}
         nseFile={nseFile}
-        nriFile={nriFile}
         setRiskFile={setRiskFile}
         setNseFile={setNseFile}
-        setNriFile={setNriFile}
         handleFileSelect={handleFileSelect}
         handleConfirm={handleConfirm}
         handleCancel={handleCancel}

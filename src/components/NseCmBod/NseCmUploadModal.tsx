@@ -25,11 +25,9 @@ interface NseCmUploadModalProps {
   setShowUploadModal: (show: boolean) => void;
   riskFile: File | null;
   nseFile: File | null;
-  nriFile: File | null;
   setRiskFile: (file: File | null) => void;
   setNseFile: (file: File | null) => void;
-  setNriFile: (file: File | null) => void;
-  handleFileSelect: (type: 'risk' | 'nse' | 'nri', file: File) => void;
+  handleFileSelect: (type: 'risk' | 'nse' , file: File) => void;
   handleConfirm: () => void;
   handleCancel: () => void;
 }
@@ -39,17 +37,15 @@ const NseCmUploadModal: React.FC<NseCmUploadModalProps> = ({
   setShowUploadModal,
   riskFile,
   nseFile,
-  nriFile,
   setRiskFile,
   setNseFile,
-  setNriFile,
   handleFileSelect,
   handleConfirm,
   handleCancel
 }) => {
   return (
     <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-      <DialogContent className="max-w-6xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Upload className="h-5 w-5 text-blue-600" />
@@ -60,14 +56,14 @@ const NseCmUploadModal: React.FC<NseCmUploadModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4">
           <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                <span>Ledger</span>
+                <span>Risk File</span>
               </CardTitle>
-              <CardDescription>Ledger DDMMYYYY (.xlsx)</CardDescription>
+              <CardDescription>Upload the Risk Excel file (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {riskFile ? (
@@ -158,55 +154,6 @@ const NseCmUploadModal: React.FC<NseCmUploadModalProps> = ({
               )}
             </CardContent>
           </Card>
-
-          <Card className="border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                <span>NRI File</span>
-              </CardTitle>
-              <CardDescription>Upload the NRI Excel file (.xlsx)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {nriFile ? (
-                <div className="text-center py-4">
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-green-800">{nriFile.name}</p>
-                      <p className="text-xs text-green-600">File uploaded successfully</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setNriFile(null)}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                  <label htmlFor="nri-upload-modal" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">
-                      Click to upload
-                    </span>
-                  </label>
-                  <input
-                    id="nri-upload-modal"
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileSelect('nri', file);
-                    }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -215,7 +162,7 @@ const NseCmUploadModal: React.FC<NseCmUploadModalProps> = ({
           </Button>
           <Button 
             onClick={handleConfirm} 
-            disabled={!riskFile || !nseFile || !nriFile}
+            disabled={!riskFile || !nseFile }
             className="bg-blue-600 hover:bg-blue-700"
           >
             Process Files
