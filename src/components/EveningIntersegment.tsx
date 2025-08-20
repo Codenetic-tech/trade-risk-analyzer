@@ -365,7 +365,7 @@ const EveningIntersegment: React.FC = () => {
     // Get date for filename (DDMMYYYY)
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: use getMonth() instead of getDate()
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
@@ -436,9 +436,10 @@ const EveningIntersegment: React.FC = () => {
     );
     if (filteredData.length === 0) return;
 
+    // Get date for filename (DDMMYYYY)
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: use getMonth() instead of getDate()
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
@@ -465,9 +466,10 @@ const EveningIntersegment: React.FC = () => {
     if (filteredData.length === 0) return;
 
 
+    // Get date for filename (DDMMYYYY)
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: use getMonth() instead of getDate()
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
