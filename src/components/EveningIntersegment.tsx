@@ -33,6 +33,8 @@ interface KambalaData {
   margin1: number;
   kambalaNseAmount: number;
   kambalaMcxAmount: number;
+  nseAmount: number; // Add this
+  mcxAmount: number; // Add this
 }
 
 const EveningIntersegment: React.FC = () => {
@@ -43,12 +45,12 @@ const EveningIntersegment: React.FC = () => {
   const itemsPerPage = 50;
   const [showVisualization, setShowVisualization] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [mcxProfundInput, setMcxProfundInput] = useState<string>("15");
+  const [mcxProfundInput, setMcxProfundInput] = useState<string>("20");
   const [isLoading, setIsLoading] = useState(false);
 
   const mcxProfundAmount = useMemo(() => {
     const value = parseFloat(mcxProfundInput);
-    return isNaN(value) ? 1500000 : Math.round(value * 100000);
+    return isNaN(value) ? 2000000 : Math.round(value * 100000);
   }, [mcxProfundInput]);
 
   // Advanced filter states
@@ -239,37 +241,56 @@ const EveningIntersegment: React.FC = () => {
         const margin99 = Math.round(availableMargin * 0.99);
         const margin1 = Math.round(availableMargin * 0.01);
 
-        // New Kambala calculations based on uncleared cash
-        let kambalaNseAmount, kambalaMcxAmount;
+         // Calculate all amounts once
+        let nseAmount, mcxAmount, kambalaNseAmount, kambalaMcxAmount;
 
         if (collateralTotal > 0) {
           // Collateral client logic
           if (marginUsed < collateralTotal) {
+            nseAmount = Math.round((cash + payin) * 0.01);
+            mcxAmount = Math.round((cash + payin) * 0.99);
             kambalaNseAmount = -Math.round((cash + payin) * 0.99);
           } else {
-            const newValue = collateralTotal - marginUsed;
-            if (newValue < (cash + payin)) {
-              const amount = (cash + payin) + newValue;
-              kambalaNseAmount = -Math.round(amount * 0.99);
+            const newValue = marginUsed - collateralTotal;
+            if (newValue > 0) {
+              nseAmount = newValue + (availableMargin * 0.01);
+              mcxAmount = Math.round((cash + payin - newValue) * 0.99);
+              kambalaNseAmount = -Math.round((cash + payin - newValue) * 0.99);
             } else {
+              nseAmount = Math.round((availableMargin * 0.01) + marginUsed);
+              mcxAmount = margin99;
               kambalaNseAmount = 0;
             }
           }
           kambalaMcxAmount = -kambalaNseAmount;
         } 
-        
         else if (unclearedCash !== 0) {
-          // ✅ If margin used is 0, treat 1% of margin as ₹100
+          // If margin used is 0, treat 1% of margin as ₹100
           const onePercent = marginUsed === 0 ? 100 : marginUsed * 0.01;
           const newMarginUsed = marginUsed + onePercent;
-
           const calculatedAmount = newMarginUsed - (cash + payin);
 
-          kambalaNseAmount = Math.round(calculatedAmount);      // NSE positive
-          kambalaMcxAmount = -Math.round(calculatedAmount);     // MCX opposite
+          kambalaNseAmount = Math.round(calculatedAmount);
+          kambalaMcxAmount = -Math.round(calculatedAmount);
+          
+          // For non-collateral clients with uncleared cash
+          if ((cash + payin) < marginUsed) {
+            nseAmount = Math.round((availableMargin * 0.01) + marginUsed);
+          } else {
+            nseAmount = Math.round((availableMargin * 0.01) + marginUsed);
+          }
+          mcxAmount = margin99;
         } else {
+          // Default case for non-collateral clients without uncleared cash
           kambalaNseAmount = Math.round(-margin99);
           kambalaMcxAmount = Math.round(margin99);
+          
+          if ((cash + payin) < marginUsed) {
+            nseAmount = Math.round((availableMargin * 0.01) + marginUsed);
+          } else {
+            nseAmount = Math.round((availableMargin * 0.01) + marginUsed);
+          }
+          mcxAmount = margin99;
         }
 
         return {
@@ -287,7 +308,9 @@ const EveningIntersegment: React.FC = () => {
           margin99,
           margin1,
           kambalaNseAmount,
-          kambalaMcxAmount
+          kambalaMcxAmount,
+          nseAmount, // Add this
+          mcxAmount,  // Add this
         };
       });
 
@@ -327,35 +350,9 @@ const EveningIntersegment: React.FC = () => {
       year: 'numeric'
     }).replace(/ /g, '-');
 
+      
     const nseContent = processedData.map(row => {
-      const cash = row.Cash;
-      const payin = row.Payin;
-      const marginUsed = row.MarginUsed;
-      const collateralTotal = row.CollateralTotal;
-      
-      let nseAmount;
-      if (collateralTotal > 0) {
-      // Updated collateral client logic
-      if (marginUsed < collateralTotal) {
-        nseAmount = Math.round((cash + payin) * 0.01);
-      } else {
-        const newValue = marginUsed - collateralTotal;
-        if (newValue > 0) {
-          nseAmount = newValue + (row.AvailableMargin * 0.01);
-        } else {
-          nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
-        }
-      }
-    } else {
-      // Existing non-collateral logic
-      if ((cash + payin) < marginUsed) {
-        nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
-      } else {
-        nseAmount = Math.round((row.AvailableMargin * 0.01) + marginUsed);
-      }
-    }
-      
-      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(nseAmount)},,,,,,,D`;
+      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(row.nseAmount)},,,,,,,D`;
     }).join('\n');
 
     const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
@@ -387,33 +384,10 @@ const EveningIntersegment: React.FC = () => {
       year: 'numeric'
     }).replace(/ /g, '-');
 
-    // Map each row to MCX entry
-    const mcxContent = processedData.map(row => {
-      const cash = row.Cash;
-      const payin = row.Payin;
-      const marginUsed = row.MarginUsed;
-      const collateralTotal = row.CollateralTotal;
-      
-      let mcxAmount;
-      
-      if (collateralTotal > 0) {
-        if (marginUsed < collateralTotal) {
-          mcxAmount = Math.round((cash + payin) * 0.99);
-        } else {
-          const newValue = marginUsed - collateralTotal;
-          if (newValue > 0) {
-            mcxAmount = Math.round((cash + payin - newValue) * 0.99);
-          } else {
-            mcxAmount = row.margin99;
-          }
-        }
-      } else {
-        mcxAmount = row.margin99;
-      }
-
       // Return formatted row
-      return `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(mcxAmount)},,,,,,,A`;
-    }).join('\n');
+      const mcxContent = processedData.map(row => {
+        return `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(row.mcxAmount)},,,,,,,A`;
+      }).join('\n');
 
     const profundEntry = `${currentDate},CO,8090,46365,,,P,${Math.round(mcxProfundAmount)},,,,,,,A`;
 
@@ -532,6 +506,8 @@ const EveningIntersegment: React.FC = () => {
       'Collateral Total': row.CollateralTotal,
       '99% Margin': row.margin99,
       '1% Margin': row.margin1,
+      'NSE Globe': row.nseAmount, // Add this
+      'MCX Globe': row.mcxAmount, // Add this
       'Kambala NSE': row.kambalaNseAmount,
       'Kambala MCX': row.kambalaMcxAmount,
     }));
@@ -738,7 +714,7 @@ const EveningIntersegment: React.FC = () => {
                       value={mcxProfundInput}
                       onChange={(e) => setMcxProfundInput(e.target.value.replace(/[^0-9.]/g, ''))}
                       className="w-20 p-2 border border-yellow-300 rounded-md text-center font-mono"
-                      placeholder="15"
+                      placeholder="20"
                     />
                   </div>
                   <div className="text-sm text-yellow-700 font-mono bg-yellow-100 px-2 py-1 rounded">
@@ -795,18 +771,17 @@ const EveningIntersegment: React.FC = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Entity</TableHead>
-                  <TableHead>Level</TableHead>
-                  <TableHead>Profile</TableHead>
                   <TableHead className="text-right">Cash</TableHead>
                   <TableHead className="text-right">Payin</TableHead>
                   <TableHead className="text-right">Uncleared Cash</TableHead>
                   <TableHead className="text-right">TOTAL</TableHead>
                   <TableHead className="text-right">Available Margin</TableHead>
                   <TableHead className="text-right">Margin Used</TableHead>
-                  <TableHead className="text-right">Available Check</TableHead>
                   <TableHead className="text-right">Collateral Total</TableHead>
-                  <TableHead className="text-right bg-blue-50">99% Margin</TableHead>
-                  <TableHead className="text-right bg-green-50">1% Margin</TableHead>
+                  <TableHead className="text-right">99% Margin</TableHead>
+                  <TableHead className="text-right">1% Margin</TableHead>
+                  <TableHead className="text-right bg-blue-50">NSE Globe</TableHead>
+                  <TableHead className="text-right bg-green-50">MCX Globe</TableHead>
                   <TableHead className="text-right bg-red-50">Kambala NSE</TableHead>
                   <TableHead className="text-right bg-purple-50">Kambala MCX</TableHead>
                 </TableRow>
@@ -814,14 +789,14 @@ const EveningIntersegment: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={15} className="text-center py-8">
+                    <TableCell colSpan={14} className="text-center py-8">
                       <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
                       <p className="mt-2 text-slate-600">Processing files...</p>
                     </TableCell>
                   </TableRow>
                 ) : processedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={15} className="text-center py-8">
+                    <TableCell colSpan={14} className="text-center py-8">
                       <FileSpreadsheet className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No Data Processed Yet
@@ -840,7 +815,7 @@ const EveningIntersegment: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={15} className="text-center py-8">
+                    <TableCell colSpan={14} className="text-center py-8">
                       <Search className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No matching records found
@@ -854,18 +829,17 @@ const EveningIntersegment: React.FC = () => {
                   paginatedData.map((row, index) => (
                     <TableRow key={index} className="hover:bg-slate-50">
                       <TableCell className="font-medium">{row.Entity}</TableCell>
-                      <TableCell>{row.Level}</TableCell>
-                      <TableCell>{row.Profile}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.Cash)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.Payin)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.UnclearedCash)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.TOTAL)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold">{formatNumber(row.AvailableMargin)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.MarginUsed)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.AvailableCheck)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.CollateralTotal)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.margin99)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.margin1)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.margin99)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.margin1)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-blue-600 bg-blue-50">{formatNumber(row.nseAmount)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-green-600 bg-green-50">{formatNumber(row.mcxAmount)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold text-red-600 bg-red-50">{formatNumber(row.kambalaNseAmount)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold text-purple-600 bg-purple-50">{formatNumber(row.kambalaMcxAmount)}</TableCell>
                     </TableRow>
