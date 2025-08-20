@@ -62,6 +62,8 @@ const EveningIntersegment: React.FC = () => {
     marginRange: { min: '', max: '' },
   });
 
+  const [mismatchErrors, setMismatchErrors] = useState<string[]>([]); // this is for different available margin and available check values
+
   const parseExcel = async (file: File): Promise<any[]> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -163,6 +165,9 @@ const EveningIntersegment: React.FC = () => {
   setIsLoading(true);
 
     try {
+
+      setMismatchErrors([]);
+
       // Parse code Excel file first to get the codes to filter by
       const codeData = await parseExcel(codeFile);
       console.log('Code data:', codeData);
@@ -218,6 +223,8 @@ const EveningIntersegment: React.FC = () => {
         console.warn('Missing codes from Kambala file:', missingCodes);
       }
 
+      const mismatchErrorsList: string[] = [];
+
       // Process and calculate margins
       const processedKambalaData: KambalaData[] = filteredData.map(row => {
         const parseValue = (value: any): number => {
@@ -237,9 +244,17 @@ const EveningIntersegment: React.FC = () => {
         const marginUsed = parseValue(row.MarginUsed);
         const collateralTotal = parseValue(row['Collateral(Total)']);
         const availableMargin = parseValue(row['Available Margin']);
+        const availableCheck = parseValue(row['Available check']); // Add this
         
         const margin99 = Math.round(availableMargin * 0.99);
         const margin1 = Math.round(availableMargin * 0.01);
+
+        // Check if Available Margin and Available Check match
+        if (Math.abs(availableMargin - availableCheck) > 0.01) {
+          const errorMsg = `${String(row.Entity || '')}: Available Margin (${availableMargin}) ≠ Available Check (${availableCheck})`;
+          console.error('UCC mismatch:', errorMsg);
+          mismatchErrorsList.push(errorMsg);
+        }
 
          // Calculate all amounts once
         let nseAmount, mcxAmount, kambalaNseAmount, kambalaMcxAmount;
@@ -313,13 +328,23 @@ const EveningIntersegment: React.FC = () => {
           mcxAmount,  // Add this
         };
       });
-
-      setProcessedData(processedKambalaData);
       
-      toast({
-        title: "Processing Complete",
-        description: `Processed ${processedKambalaData.length} unique records from ${codes.length} intersegment codes`,
-      });
+      setProcessedData(processedKambalaData);
+      setMismatchErrors(mismatchErrorsList);
+      
+     // Show appropriate toast message based on whether there are errors
+      if (mismatchErrorsList.length > 0) {
+        toast({
+          title: "Processing Complete with Errors",
+          description: `Processed ${processedKambalaData.length} records but found ${mismatchErrorsList.length} UCC mismatches`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Processing Complete",
+          description: `Processed ${processedKambalaData.length} unique records from ${codes.length} intersegment codes`,
+        });
+      }
     } catch (error) {
       console.error('Error processing files:', error);
       toast({
@@ -332,6 +357,7 @@ const EveningIntersegment: React.FC = () => {
       setIsLoading(false);
     }
   };
+
 
   const downloadNSEGlobeFile = () => {
     if (processedData.length === 0) return;
@@ -626,6 +652,23 @@ const EveningIntersegment: React.FC = () => {
         onOpenChange={setShowUploadModal}
         onFilesSelected={processFiles}
       />
+
+      {/* available margin available check Mismatch Errors */}
+      {mismatchErrors.length > 0 && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>
+            <div className="font-bold mb-2">UCC Mismatch Detected:</div>
+            {mismatchErrors.slice(0, 5).map((error, index) => (
+              <div key={index}>• {error}</div>
+            ))}
+            {mismatchErrors.length > 5 && (
+              <div className="mt-2">
+                ...and {mismatchErrors.length - 5} more mismatches
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Data Visualization */}
       {processedData.length > 0 && showVisualization && (
