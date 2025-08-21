@@ -406,13 +406,27 @@ const NseCm: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-bold text-slate-800">NSE CM - Morning BOD</h1>
-        <p className="text-slate-600 mt-2">
-          Upload Risk, NSE Globe, and NRI files to analyze NSE CM allocation differences
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">NSE CM - Morning BOD</h1>
+            <p className="text-slate-600 mt-2">
+              Upload Risk, NSE Globe, and NRI files to analyze NSE CM allocation differences
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            <Button 
+              onClick={() => setShowUploadModal(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isProcessing}
+              >
+              <Upload className="h-4 w-4 mr-2" />
+              {isProcessing ? 'Processing...' : 'Upload Files'}
+              </Button>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -486,14 +500,7 @@ const NseCm: React.FC = () => {
                 disabled={!processedData || isProcessing}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Export Output File
-              </Button>
-              <Button
-                onClick={() => setShowUploadModal(true)}
-                variant="outline"
-                disabled={isProcessing}
-              >
-                Upload New Files
+                Export Globe File
               </Button>
             </div>
           </div>
@@ -519,7 +526,7 @@ const NseCm: React.FC = () => {
                 disabled={!processedData || isProcessing}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Export CSV
+                Export Table File
               </Button>
             </div>
           </div>
@@ -655,9 +662,6 @@ const NseCm: React.FC = () => {
                           <Upload className="h-8 w-8 text-gray-500" />
                         </div>
                         <p className="text-lg font-medium text-gray-700">No data available</p>
-                        <p className="text-gray-500 max-w-md text-center">
-                          Upload Risk, NSE Globe, and NRI files to analyze NSE CM allocation differences
-                        </p>
                         <Button 
                           onClick={() => setShowUploadModal(true)}
                           className="mt-4 bg-blue-600 hover:bg-blue-700"

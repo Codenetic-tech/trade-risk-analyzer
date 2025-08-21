@@ -10,9 +10,11 @@ export interface PayoutData {
   Segment: string;
   LedgerBalance?: number;
   Status?: 'OK' | 'Not OK';
-  NSETotal?: number;       // New field: NSE total balance
-  MCXTotal?: number;       // New field: MCX balance
-  Difference?: number;     // New field: Difference between ledger balance and pay
+  NSETotal?: number;
+  MCXTotal?: number;
+  Difference?: number;
+  Margin?: number;
+  NSESpan?: number; // Added NSE Span field
 }
 
 export interface LedgerData {
@@ -154,6 +156,101 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerData> => {
   });
 };
 
+// Add MRG file parser
+export const parseMrgFile = async (file: File): Promise<{[key: string]: number}> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        let mrgText = text;
+        
+        // Remove BOM if present
+        if (mrgText.charCodeAt(0) === 0xFEFF) {
+          mrgText = mrgText.substring(1);
+        }
+
+        const marginMap: {[key: string]: number} = {};
+        const lines = mrgText.split('\n');
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          
+          const values = trimmedLine.split(',');
+          // Filter for row type 30 and ensure enough columns
+          if (values[0] === '30' && values.length >= 13) {
+            const ucc = values[3]?.trim();
+            // Margin is the 13th column (index 12)
+            const margin = parseFloat(values[12]) || 0;
+            
+            if (ucc) {
+              marginMap[ucc] = margin;
+            }
+          }
+        }
+        
+        resolve(marginMap);
+      } catch (error) {
+        console.error('Error parsing MRG file:', error);
+        reject(new Error('Failed to parse MRG file'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read MRG file'));
+    reader.readAsText(file);
+  });
+};
+
+// Add MG13 file parser for NSE Span calculation
+export const parseMG13File = async (file: File): Promise<{[key: string]: number}> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        let mg13Text = text;
+        
+        // Remove BOM if present
+        if (mg13Text.charCodeAt(0) === 0xFEFF) {
+          mg13Text = mg13Text.substring(1);
+        }
+
+        const nseSpanMap: {[key: string]: number} = {};
+        const lines = mg13Text.split('\n');
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          
+          const values = trimmedLine.split(',');
+          if (values.length >= 6) {
+            // Extract UCC (column B, index 1)
+            const ucc = values[1]?.trim();
+            
+            // Extract column C (index 2) and column E (index 4)
+            const columnC = parseFloat(values[2]) || 0;
+            const columnE = parseFloat(values[4]) || 0;
+            
+            // Calculate NSE Span as sum of column C and E
+            const nseSpan = columnC + columnE;
+            
+            if (ucc) {
+              nseSpanMap[ucc] = nseSpan;
+            }
+          }
+        }
+        
+        resolve(nseSpanMap);
+      } catch (error) {
+        console.error('Error parsing MG13 file:', error);
+        reject(new Error('Failed to parse MG13 file'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read MG13 file'));
+    reader.readAsText(file);
+  });
+};
+
 export const processFiles = async (files: File[]) => {
   if (!files || files.length === 0) {
     throw new Error("Please select payout files to process");
@@ -161,18 +258,28 @@ export const processFiles = async (files: File[]) => {
 
   let payoutData: PayoutData[] = [];
   let ledgerData: LedgerData = {};
+  let marginData: {[key: string]: number} = {};
+  let nseSpanData: {[key: string]: number} = {};
   
   // Process each file
   for (const file of files) {
-    if (file.name.toLowerCase().includes('ledger')) {
+    const fileName = file.name.toLowerCase();
+    
+    if (fileName.includes('ledger')) {
       ledgerData = await parseLedgerExcel(file);
+    } else if (fileName.includes('mrg')) {
+      // Handle MRG file
+      marginData = await parseMrgFile(file);
+    } else if (fileName.includes('mg13') || fileName.includes('f_mg13')) {
+      // Handle MG13 file for NSE Span
+      nseSpanData = await parseMG13File(file);
     } else {
       let segment = '';
       
       // Determine segment based on filename
-      if (file.name.toLowerCase().includes('mcx')) segment = 'MCX';
-      else if (file.name.toLowerCase().includes('fo')) segment = 'FO';
-      else if (file.name.toLowerCase().includes('cm')) segment = 'CM';
+      if (fileName.includes('mcx')) segment = 'MCX';
+      else if (fileName.includes('fo')) segment = 'FO';
+      else if (fileName.includes('cm')) segment = 'CM';
       else continue;
       
       const fileData = await parseExcel(file);
@@ -207,6 +314,13 @@ export const processFiles = async (files: File[]) => {
     }
   }
   
+  // Add margin data and NSE Span data to payout records
+  payoutData = payoutData.map(record => ({
+    ...record,
+    Margin: marginData[record.UCC] || 0,
+    NSESpan: nseSpanData[record.UCC] || 0
+  }));
+    
   return { payoutData, ledgerData };
 };
 
@@ -222,6 +336,8 @@ export const exportProcessedData = (processedData: PayoutData[]) => {
     'Ledger Balance': row.LedgerBalance,
     'NSE Total': row.NSETotal,
     'MCX Total': row.MCXTotal,
+    'NSE Span': row.NSESpan,
+    'MRG Margin': row.Margin,
     'Difference': row.Difference,
     Status: row.Status
   }));
@@ -273,11 +389,22 @@ export const processDataWithLedger = (
           break;
       }
       
-      // Set status based on segment balance
-      status = ledgerBalance >= payout.Pay ? 'OK' : 'Not OK';
+      // Calculate available balance based on segment
+      let availableBalance = ledgerBalance;
       
-      // Calculate difference
-      difference = Math.round(ledgerBalance - payout.Pay);
+      if (payout.Segment === 'MCX') {
+        // For MCX: available = ledgerBalance - Margin
+        availableBalance = ledgerBalance - (payout.Margin || 0);
+        difference = Math.round(mcxTotal - payout.Pay);
+      } else {
+        // For FO/CM: available = ledgerBalance - NSESpan
+        availableBalance = nseTotal - (payout.NSESpan || 0);
+        difference = Math.round(nseTotal - payout.Pay);
+
+      }
+      
+      // Set status based on available balance
+      status = availableBalance >= payout.Pay ? 'OK' : 'Not OK';
     }
 
     return {
@@ -286,7 +413,9 @@ export const processDataWithLedger = (
       Status: status,
       NSETotal: nseTotal,
       MCXTotal: mcxTotal,
-      Difference: difference
+      Difference: difference,
+      Margin: payout.Margin, // Preserve margin value
+      NSESpan: payout.NSESpan // Preserve NSE Span value
     };
   });
 };
@@ -296,10 +425,12 @@ export const calculateSummary = (processedData: PayoutData[]) => {
   let notOkCount = 0;
   let totalPayout = 0;
   let totalLedgerBalance = 0;
+  let totalNSESpan = 0;
 
   processedData.forEach(row => {
     totalPayout += row.Pay;
     if (row.LedgerBalance) totalLedgerBalance += row.LedgerBalance;
+    if (row.NSESpan) totalNSESpan += row.NSESpan;
     if (row.Status === 'OK') okCount++;
     else notOkCount++;
   });
@@ -308,6 +439,7 @@ export const calculateSummary = (processedData: PayoutData[]) => {
     totalRecords: processedData.length,
     totalPayout,
     totalLedgerBalance,
+    totalNSESpan,
     okCount,
     notOkCount
   };
@@ -327,7 +459,7 @@ export const exportRMSLimitsFile = (processedData: PayoutData[]) => {
   // Create RMS Limits content
   const lines = sortedData.map(row => {
     const segment = row.Segment === 'MCX' ? 'COM' : '';
-    const amount = Math.round(row.Difference || 0);
+    const amount = (row.Difference);
     return `${row.UCC}||${segment}||${amount}|||||||||||||no`;
   });
 

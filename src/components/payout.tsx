@@ -59,63 +59,74 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
   filterConfig
 }) => {
   return (
-    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search UCC, Client, Segment..."
-            className="pl-10 pr-4 py-2 w-full border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={disabled}
-          />
+    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+        {/* Search Input - spans 2 columns on large screens */}
+        <div className="lg:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Search Records
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search UCC, Client, Segment..."
+              className="pl-10 pr-4 py-2.5 w-full border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              disabled={disabled}
+            />
+          </div>
         </div>
         
+        {/* Filters */}
         {filterConfig.map((filter) => {
           if (filter.type === 'range') {
             return (
-              <div key={filter.id} className="flex flex-col min-w-[200px]">
-                <label className="text-sm font-medium text-slate-700 mb-1">
+              <div key={filter.id} className="space-y-1">
+                <label className="block text-sm font-medium text-slate-700">
                   {filter.label}
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    placeholder={filter.minPlaceholder || 'Min'}
-                    value={filters[filter.id].min}
-                    onChange={(e) => onFiltersChange({
-                      ...filters,
-                      [filter.id]: {
-                        ...filters[filter.id],
-                        min: e.target.value
-                      }
-                    })}
-                    className="p-2 border border-slate-300 rounded-md w-full"
-                    disabled={disabled}
-                  />
-                  <input
-                    type="number"
-                    placeholder={filter.maxPlaceholder || 'Max'}
-                    value={filters[filter.id].max}
-                    onChange={(e) => onFiltersChange({
-                      ...filters,
-                      [filter.id]: {
-                        ...filters[filter.id],
-                        max: e.target.value
-                      }
-                    })}
-                    className="p-2 border border-slate-300 rounded-md w-full"
-                    disabled={disabled}
-                  />
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      placeholder={filter.minPlaceholder || 'Min'}
+                      value={filters[filter.id].min}
+                      onChange={(e) => onFiltersChange({
+                        ...filters,
+                        [filter.id]: {
+                          ...filters[filter.id],
+                          min: e.target.value
+                        }
+                      })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition"
+                      disabled={disabled}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      placeholder={filter.maxPlaceholder || 'Max'}
+                      value={filters[filter.id].max}
+                      onChange={(e) => onFiltersChange({
+                        ...filters,
+                        [filter.id]: {
+                          ...filters[filter.id],
+                          max: e.target.value
+                        }
+                      })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition"
+                      disabled={disabled}
+                    />
+                  </div>
                 </div>
               </div>
             );
           } else if (filter.type === 'select') {
             return (
-              <div key={filter.id} className="flex flex-col min-w-[200px]">
-                <label className="text-sm font-medium text-slate-700 mb-1">
+              <div key={filter.id} className="space-y-1">
+                <label className="block text-sm font-medium text-slate-700">
                   {filter.label}
                 </label>
                 <select
@@ -124,7 +135,7 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                     ...filters,
                     [filter.id]: e.target.value
                   })}
-                  className="p-2 border border-slate-300 rounded-md"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition"
                   disabled={disabled}
                 >
                   <option value="">All</option>
@@ -136,8 +147,8 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
             );
           }
           return (
-            <div key={filter.id} className="flex flex-col min-w-[200px]">
-              <label className="text-sm font-medium text-slate-700 mb-1">
+            <div key={filter.id} className="space-y-1">
+              <label className="block text-sm font-medium text-slate-700">
                 {filter.label}
               </label>
               <input
@@ -147,32 +158,36 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   ...filters,
                   [filter.id]: e.target.value
                 })}
-                className="p-2 border border-slate-300 rounded-md"
+                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition"
                 disabled={disabled}
               />
             </div>
           );
         })}
         
-        <div className="flex items-end gap-2">
+        {/* Clear Button - now in its own grid cell */}
+        <div className="flex items-center gap-3 justify-end">
           <Button
             onClick={onClearFilters}
             variant="outline"
             disabled={disabled || activeFiltersCount === 0}
-            className="h-10"
+            className="h-11 px-4 border-slate-300 hover:bg-slate-50"
           >
             Clear Filters
           </Button>
           {activeFiltersCount > 0 && (
-            <span className="bg-blue-500 text-white rounded-full h-6 w-6 flex items-center justify-center text-xs">
-              {activeFiltersCount}
-            </span>
+            <div className="flex items-center">
+              <span className="bg-blue-500 text-white rounded-lg h-8 px-3 flex items-center justify-center text-sm font-medium">
+                {activeFiltersCount} active filter{activeFiltersCount !== 1 ? 's' : ''}
+              </span>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 };
+
 
 const Payout: React.FC = () => {
   const [payoutData, setPayoutData] = useState<PayoutData[]>([]);
@@ -191,6 +206,15 @@ const Payout: React.FC = () => {
     segment: '',
     status: '',
     payRange: { min: '', max: '' },
+  });
+
+  // Sorting state - Added sorting functionality
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof PayoutData | null;
+    direction: 'asc' | 'desc';
+  }>({
+    key: null,
+    direction: 'asc',
   });
 
   // Processed data with ledger and status
@@ -298,8 +322,6 @@ const Payout: React.FC = () => {
     });
   };
 
-
-
   const handleExport = () => {
     if (processedData.length === 0) {
       toast({
@@ -318,13 +340,22 @@ const Payout: React.FC = () => {
     });
   };
 
+  // Sorting handler - Added sorting functionality
+  const handleSort = (key: keyof PayoutData) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
   // Calculate summary statistics
   const summary = useMemo(() => {
     return calculateSummary(processedData);
   }, [processedData]);
 
   const filteredData = useMemo(() => {
-    return processedData.filter(item => {
+    const data = processedData.filter(item => {
       // Search filter
       const matchesSearch = 
         item.UCC.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -347,7 +378,38 @@ const Payout: React.FC = () => {
       return matchesSearch && matchesUCC && matchesClientName && matchesSegment && 
              matchesStatus && matchesPayRange;
     });
-  }, [processedData, searchQuery, filters]);
+
+    // Apply sorting if sortConfig is set
+    if (sortConfig.key) {
+      data.sort((a, b) => {
+        const aValue = a[sortConfig.key!];
+        const bValue = b[sortConfig.key!];
+
+        // Handle null/undefined values
+        if (aValue === null || aValue === undefined) return sortConfig.direction === 'asc' ? 1 : -1;
+        if (bValue === null || bValue === undefined) return sortConfig.direction === 'asc' ? -1 : 1;
+
+        // Handle string comparisons
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const comparison = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
+          return sortConfig.direction === 'asc' ? comparison : -comparison;
+        }
+
+        // Handle numeric comparisons
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+
+        // Fallback to string comparison
+        const aString = String(aValue).toLowerCase();
+        const bString = String(bValue).toLowerCase();
+        const comparison = aString.localeCompare(bString);
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    return data;
+  }, [processedData, searchQuery, filters, sortConfig]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -375,6 +437,7 @@ const Payout: React.FC = () => {
       payRange: { min: '', max: '' },
     });
     setSearchQuery('');
+    setSortConfig({ key: null, direction: 'asc' }); // Reset sorting as well
     setCurrentPage(1);
   };
 
@@ -407,8 +470,8 @@ const Payout: React.FC = () => {
         onOpenChange={setShowUploadModal}
         onFilesSelected={handleProcessFiles}
         multiple={true}
-        accept=".xlsx,.xls"
-        description="Upload MCX, FO, CM payout files and Ledger file"
+        accept=".xlsx,.xls,.csv,.txt"
+        description="Upload MCX, FO, CM payout files, Ledger file, and MRG file"
       />
 
       {/* Summary Cards */}
@@ -479,9 +542,6 @@ const Payout: React.FC = () => {
         activeFiltersCount={activeFiltersCount}
         disabled={processedData.length === 0}
         filterConfig={[
-          { id: 'ucc', label: 'UCC', type: 'text' },
-          { id: 'clientName', label: 'Client Name', type: 'text' },
-          { id: 'segment', label: 'Segment', type: 'text' },
           { 
             id: 'status', 
             label: 'Status', 
@@ -540,27 +600,149 @@ const Payout: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>UCC</TableHead>
-                  <TableHead>Segment</TableHead>
-                  <TableHead className="text-right">Pay</TableHead>
-                  <TableHead className="text-right">Ledger Balance</TableHead>
-                  <TableHead className="text-right">NSE Total</TableHead>
-                  <TableHead className="text-right">MCX Total</TableHead>
-                  <TableHead className="text-right">Difference</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>
+                    <button 
+                      onClick={() => handleSort('UCC')}
+                      className="flex items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      UCC
+                      {sortConfig.key === 'UCC' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button 
+                      onClick={() => handleSort('Segment')}
+                      className="flex items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Segment
+                      {sortConfig.key === 'Segment' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('Pay')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Pay
+                      {sortConfig.key === 'Pay' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('LedgerBalance')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Ledger Balance
+                      {sortConfig.key === 'LedgerBalance' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('NSETotal')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      NSE Total
+                      {sortConfig.key === 'NSETotal' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('MCXTotal')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      MCX Total
+                      {sortConfig.key === 'MCXTotal' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('Margin')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      MRG Margin
+                      {sortConfig.key === 'Margin' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('NSESpan')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      NSE Span
+                      {sortConfig.key === 'NSESpan' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
+                      onClick={() => handleSort('Difference')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Difference
+                      {sortConfig.key === 'Difference' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button 
+                      onClick={() => handleSort('Status')}
+                      className="flex items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Status
+                      {sortConfig.key === 'Status' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
                       <p className="mt-2 text-slate-600">Processing files...</p>
                     </TableCell>
                   </TableRow>
                 ) : processedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       <FileSpreadsheet className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No Data Processed Yet
@@ -579,7 +761,7 @@ const Payout: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       <Search className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No matching records
@@ -603,9 +785,11 @@ const Payout: React.FC = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.Pay)}</TableCell>
-                      <TableCell className="text-right font-mono">{row.LedgerBalance ? formatNumber(row.LedgerBalance) : 'N/A'}</TableCell>
-                      <TableCell className="text-right font-mono">{row.NSETotal ? formatNumber(row.NSETotal) : 'N/A'}</TableCell>
-                      <TableCell className="text-right font-mono">{row.MCXTotal ? formatNumber(row.MCXTotal) : 'N/A'}</TableCell>
+                      <TableCell className="text-right font-mono">{row.LedgerBalance ? formatNumber(row.LedgerBalance) : '0'}</TableCell>
+                      <TableCell className="text-right font-mono">{row.NSETotal ? formatNumber(row.NSETotal) : '0'}</TableCell>
+                      <TableCell className="text-right font-mono">{row.MCXTotal ? formatNumber(row.MCXTotal) : '0'}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.Margin || 0)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(row.NSESpan || 0)}</TableCell>
                       <TableCell className={`text-right font-mono ${
                         row.Difference !== undefined && row.Difference < 0 
                           ? 'text-red-600' 
@@ -613,7 +797,7 @@ const Payout: React.FC = () => {
                       }`}>
                         {row.Difference !== undefined 
                           ? formatNumber(row.Difference) 
-                          : 'N/A'}
+                          : '0'}
                       </TableCell>
                       <TableCell>
                         {row.Status === 'OK' ? (

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { TrendingUp, TrendingDown, Download, Settings, Edit, Search, Filter, Upload as UploadIcon, Save, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, Settings, Edit, Search, Filter, Upload as UploadIcon, Save, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select';
@@ -24,11 +24,11 @@ const Mcx: React.FC = () => {
   const [unallocatedFund, setUnallocatedFund] = useState<number>(0);
   const [tempUnallocatedFund, setTempUnallocatedFund] = useState<number>(0);
   const [isEditingUnallocated, setIsEditingUnallocated] = useState(false);
-  const [mcxProfundInput, setMcxProfundInput] = useState<string>("35");
+  const [mcxProfundInput, setMcxProfundInput] = useState<string>("35.1");
 
   const mcxProfundAmount = useMemo(() => {
     const value = parseFloat(mcxProfundInput);
-    return isNaN(value) ? 3500000 : Math.round(value * 100000);
+    return isNaN(value) ? 3510000 : Math.round(value * 100000);
   }, [mcxProfundInput]);
   
   const [processedData, setProcessedData] = useState<{
@@ -446,10 +446,24 @@ const Mcx: React.FC = () => {
     <div className="space-y-8">
       {/* Header */}
       <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-bold text-slate-800">MCX - Morning BOD</h1>
-        <p className="text-slate-600 mt-2">
-          Upload Backoffice Ledger, MCX Globe, and MRG files to analyze MCX allocation differences
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">MCX - Morning BOD</h1>
+            <p className="text-slate-600 mt-2">
+              Upload Backoffice Ledger, MCX Globe, and MRG files to analyze MCX allocation differences
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            <Button 
+              onClick={() => setShowUploadModal(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isProcessing}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {isProcessing ? 'Processing...' : 'Upload Files'}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -536,13 +550,7 @@ const Mcx: React.FC = () => {
                 disabled={!processedData}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Export Output File
-              </Button>
-              <Button
-                onClick={() => setShowUploadModal(true)}
-                variant="outline"
-              >
-                Upload New Files
+                Export Globe File
               </Button>
             </div>
           </div>
@@ -570,7 +578,7 @@ const Mcx: React.FC = () => {
                 disabled={!processedData}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Export CSV
+                Export Table File
               </Button>
             </div>
           </div>
