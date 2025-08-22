@@ -21,7 +21,8 @@ import {
   processDataWithLedger,
   calculateSummary,
   exportRMSLimitsFile,
-  exportmcxglobefile
+  exportmcxglobefile,
+  exportNSEGlobeFile
 } from '@/utils/payoutprocessor';
 
 interface AdvancedFiltersProps {
@@ -192,6 +193,7 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 const Payout: React.FC = () => {
   const [payoutData, setPayoutData] = useState<PayoutData[]>([]);
   const [ledgerData, setLedgerData] = useState<LedgerData>({});
+  const [duplicates, setDuplicates] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -236,9 +238,10 @@ const Payout: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { payoutData, ledgerData } = await processFiles(files);
+      const { payoutData, ledgerData, duplicates } = await processFiles(files); // Get duplicates from processFiles
       setPayoutData(payoutData);
       setLedgerData(ledgerData);
+      setDuplicates(duplicates); // Set duplicates state
       
       toast({
         title: "Processing Complete",
@@ -322,6 +325,42 @@ const Payout: React.FC = () => {
     });
   };
 
+  const handlenseglobe = () => {
+    if (processedData.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No payout data to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+        // Get date for filename (DDMMYYYY)
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = now.getFullYear();
+    const dateString = `${day}${month}${year}`;
+
+    const nseglobeContent = exportNSEGlobeFile(processedData);
+    
+    // Create and download file
+    const blob = new Blob([nseglobeContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `90221_ALLOC_${dateString}.T0150`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Export Complete",
+      description: "NSE Globe file exported successfully",
+    });
+  };
+
   const handleExport = () => {
     if (processedData.length === 0) {
       toast({
@@ -350,9 +389,9 @@ const Payout: React.FC = () => {
   };
 
   // Calculate summary statistics
-  const summary = useMemo(() => {
-    return calculateSummary(processedData);
-  }, [processedData]);
+ const summary = useMemo(() => {
+    return calculateSummary(processedData, duplicates);
+  }, [processedData, duplicates]);
 
   const filteredData = useMemo(() => {
     const data = processedData.filter(item => {
@@ -475,7 +514,7 @@ const Payout: React.FC = () => {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
         <Card className="shadow-sm border-blue-100">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-blue-600">Total Records</CardTitle>
@@ -530,6 +569,16 @@ const Payout: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+        <Card className="shadow-sm border-amber-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-amber-600">Duplicate UCCs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-700">
+              {summary.duplicateCount}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Advanced Filters */}
@@ -567,6 +616,14 @@ const Payout: React.FC = () => {
                 `(${filteredData.length} of ${processedData.length} records)`}
             </CardTitle>
             <div className="space-x-2 flex flex-wrap gap-2">
+                <Button 
+                onClick={handlenseglobe} 
+                className="bg-green-600 hover:bg-green-700"
+                disabled={processedData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Globe NSE
+              </Button>
                 <Button 
                 onClick={handlemcxglobe} 
                 className="bg-green-600 hover:bg-green-700"

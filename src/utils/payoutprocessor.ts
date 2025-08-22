@@ -14,7 +14,7 @@ export interface PayoutData {
   MCXTotal?: number;
   Difference?: number;
   Margin?: number;
-  NSESpan?: number; // Added NSE Span field
+  NSESpan?: number;
 }
 
 export interface LedgerData {
@@ -22,7 +22,7 @@ export interface LedgerData {
     mcx: number;
     nseCm: number;
     nseFo: number;
-    nseCds?: number;      // New field for CDS balance
+    nseCds?: number;
   };
 }
 
@@ -156,7 +156,6 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerData> => {
   });
 };
 
-// Add MRG file parser
 export const parseMrgFile = async (file: File): Promise<{[key: string]: number}> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -165,7 +164,6 @@ export const parseMrgFile = async (file: File): Promise<{[key: string]: number}>
         const text = e.target?.result as string;
         let mrgText = text;
         
-        // Remove BOM if present
         if (mrgText.charCodeAt(0) === 0xFEFF) {
           mrgText = mrgText.substring(1);
         }
@@ -178,10 +176,8 @@ export const parseMrgFile = async (file: File): Promise<{[key: string]: number}>
           if (!trimmedLine) continue;
           
           const values = trimmedLine.split(',');
-          // Filter for row type 30 and ensure enough columns
           if (values[0] === '30' && values.length >= 13) {
             const ucc = values[3]?.trim();
-            // Margin is the 13th column (index 12)
             const margin = parseFloat(values[12]) || 0;
             
             if (ucc) {
@@ -201,7 +197,6 @@ export const parseMrgFile = async (file: File): Promise<{[key: string]: number}>
   });
 };
 
-// Add MG13 file parser for NSE Span calculation
 export const parseMG13File = async (file: File): Promise<{[key: string]: number}> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -210,7 +205,6 @@ export const parseMG13File = async (file: File): Promise<{[key: string]: number}
         const text = e.target?.result as string;
         let mg13Text = text;
         
-        // Remove BOM if present
         if (mg13Text.charCodeAt(0) === 0xFEFF) {
           mg13Text = mg13Text.substring(1);
         }
@@ -224,14 +218,9 @@ export const parseMG13File = async (file: File): Promise<{[key: string]: number}
           
           const values = trimmedLine.split(',');
           if (values.length >= 6) {
-            // Extract UCC (column B, index 1)
             const ucc = values[1]?.trim();
-            
-            // Extract column C (index 2) and column E (index 4)
             const columnC = parseFloat(values[2]) || 0;
             const columnE = parseFloat(values[4]) || 0;
-            
-            // Calculate NSE Span as sum of column C and E
             const nseSpan = columnC + columnE;
             
             if (ucc) {
@@ -268,10 +257,8 @@ export const processFiles = async (files: File[]) => {
     if (fileName.includes('ledger')) {
       ledgerData = await parseLedgerExcel(file);
     } else if (fileName.includes('mrg')) {
-      // Handle MRG file
       marginData = await parseMrgFile(file);
     } else if (fileName.includes('mg13') || fileName.includes('f_mg13')) {
-      // Handle MG13 file for NSE Span
       nseSpanData = await parseMG13File(file);
     } else {
       let segment = '';
@@ -285,7 +272,6 @@ export const processFiles = async (files: File[]) => {
       const fileData = await parseExcel(file);
       
       const mappedData = fileData.map((row: any) => {
-        // Clean and map column names
         const ucc = String(row.UCC || row['UCC'] || '').trim();
         const clientName = String(row.ClientName || row['ClientName'] || '');
         
@@ -321,7 +307,110 @@ export const processFiles = async (files: File[]) => {
     NSESpan: nseSpanData[record.UCC] || 0
   }));
     
-  return { payoutData, ledgerData };
+ // FIXED: Improved duplicate handling logic
+  const uccMap = new Map<string, PayoutData[]>();
+  const duplicates: string[] = [];
+
+  // Group records by UCC
+  for (const record of payoutData) {
+    if (!uccMap.has(record.UCC)) {
+      uccMap.set(record.UCC, []);
+    }
+    uccMap.get(record.UCC)!.push(record);
+  }
+
+  // Process each UCC group
+  const processedData: PayoutData[] = [];
+  
+  for (const [ucc, records] of uccMap) {
+    if (records.length === 1) {
+      processedData.push(records[0]);
+      continue;
+    }
+
+    // Check segments present
+    const hasMCX = records.some(r => r.Segment === 'MCX');
+    const hasCM = records.some(r => r.Segment === 'CM');
+    const hasFO = records.some(r => r.Segment === 'FO');
+    
+    console.log(`Processing UCC ${ucc}: MCX=${hasMCX}, CM=${hasCM}, FO=${hasFO}`);
+    
+    // If we have MCX and any NSE segment, keep them separate
+    if (hasMCX && (hasCM || hasFO)) {
+      // Keep MCX record as is
+      const mcxRecord = records.find(r => r.Segment === 'MCX');
+      if (mcxRecord) {
+        processedData.push(mcxRecord);
+        console.log(`Added MCX record for ${ucc}: Pay=${mcxRecord.Pay}`);
+      }
+      
+      // Handle NSE records (CM and/or FO)
+      const nseRecords = records.filter(r => r.Segment === 'CM' || r.Segment === 'FO');
+      if (nseRecords.length > 0) {
+        if (nseRecords.length === 1) {
+          // Only one NSE segment, keep as is
+          processedData.push(nseRecords[0]);
+          console.log(`Added single NSE record for ${ucc}: ${nseRecords[0].Segment}, Pay=${nseRecords[0].Pay}`);
+        } else {
+          // Check if CM and FO have the same payout amount
+          const cmRecord = nseRecords.find(r => r.Segment === 'CM');
+          const foRecord = nseRecords.find(r => r.Segment === 'FO');
+          
+          if (cmRecord && foRecord && cmRecord.Pay === foRecord.Pay) {
+            // Same amount: remove CM, keep FO
+            processedData.push(foRecord);
+            console.log(`Removed CM record (same amount), kept FO for ${ucc}: Pay=${foRecord.Pay}`);
+          } else {
+            // Different amounts: combine them
+            const combinedRecord = {
+              ...nseRecords[0], // Start with first record
+              Segment: 'CM+FO',
+              Pay: nseRecords.reduce((sum, record) => {
+                console.log(`Adding ${record.Segment} Pay: ${record.Pay}`);
+                return sum + record.Pay;
+              }, 0)
+            };
+            
+            processedData.push(combinedRecord);
+            console.log(`Added combined NSE record for ${ucc}: Pay=${combinedRecord.Pay}`);
+            duplicates.push(ucc);
+          }
+        }
+      }
+    } else if (hasCM && hasFO && !hasMCX) {
+      // Check if CM and FO have the same payout amount
+      const cmRecord = records.find(r => r.Segment === 'CM');
+      const foRecord = records.find(r => r.Segment === 'FO');
+      
+      if (cmRecord && foRecord && cmRecord.Pay === foRecord.Pay) {
+        // Same amount: remove CM, keep FO
+        processedData.push(foRecord);
+        console.log(`Removed CM record (same amount), kept FO for ${ucc}: Pay=${foRecord.Pay}`);
+      } else {
+        // Different amounts: combine them
+        const combinedRecord = {
+          ...records[0], // Start with first record
+          Segment: 'CM+FO',
+          Pay: records.reduce((sum, record) => {
+            console.log(`Combining ${record.Segment} Pay: ${record.Pay}`);
+            return sum + record.Pay;
+          }, 0)
+        };
+        
+        processedData.push(combinedRecord);
+        console.log(`Added CM+FO combined record for ${ucc}: Pay=${combinedRecord.Pay}`);
+        duplicates.push(ucc);
+      }
+    } else {
+      // Other cases - this shouldn't happen often, but handle gracefully
+      console.log(`Unexpected case for UCC ${ucc}, keeping first record`);
+      processedData.push(records[0]);
+    }
+  }
+
+  console.log(`Final processed data count: ${processedData.length}`);
+  
+  return { payoutData: processedData, ledgerData, duplicates };
 };
 
 export const exportProcessedData = (processedData: PayoutData[]) => {
@@ -387,24 +476,40 @@ export const processDataWithLedger = (
         case 'FO':
           ledgerBalance = Math.abs(ledgerEntry.nseFo);
           break;
+        case 'CM+FO':
+          // For combined segment, use total NSE balance
+          ledgerBalance = ledgerEntry.nseCm + ledgerEntry.nseFo;
+          break;
       }
       
-      // Calculate available balance based on segment
+       // Calculate available balance based on segment
       let availableBalance = ledgerBalance;
       
       if (payout.Segment === 'MCX') {
         // For MCX: available = ledgerBalance - Margin
         availableBalance = ledgerBalance - (payout.Margin || 0);
-        difference = Math.round(mcxTotal - payout.Pay);
+        difference = mcxTotal - payout.Pay;
+        
+        // Set status based on available balance and margin
+        if (payout.Margin === 0) {
+          // If margin is 0, process whatever ledger amount is available
+          status = 'OK';
+        } else {
+          status = availableBalance >= payout.Pay ? 'OK' : 'Not OK';
+        }
       } else {
         // For FO/CM: available = ledgerBalance - NSESpan
         availableBalance = nseTotal - (payout.NSESpan || 0);
-        difference = Math.round(nseTotal - payout.Pay);
-
+        difference = nseTotal - payout.Pay;
+        
+        // Set status based on available balance and NSE span
+        if (payout.NSESpan === 0) {
+          // If NSE span is 0, process whatever ledger amount is available
+          status = 'OK';
+        } else {
+          status = availableBalance >= payout.Pay ? 'OK' : 'Not OK';
+        }
       }
-      
-      // Set status based on available balance
-      status = availableBalance >= payout.Pay ? 'OK' : 'Not OK';
     }
 
     return {
@@ -414,13 +519,13 @@ export const processDataWithLedger = (
       NSETotal: nseTotal,
       MCXTotal: mcxTotal,
       Difference: difference,
-      Margin: payout.Margin, // Preserve margin value
-      NSESpan: payout.NSESpan // Preserve NSE Span value
+      Margin: payout.Margin,
+      NSESpan: payout.NSESpan
     };
   });
 };
 
-export const calculateSummary = (processedData: PayoutData[]) => {
+export const calculateSummary = (processedData: PayoutData[], duplicates: string[]) => {
   let okCount = 0;
   let notOkCount = 0;
   let totalPayout = 0;
@@ -441,7 +546,9 @@ export const calculateSummary = (processedData: PayoutData[]) => {
     totalLedgerBalance,
     totalNSESpan,
     okCount,
-    notOkCount
+    notOkCount,
+    duplicateCount: duplicates.length,
+    duplicateUCCs: duplicates
   };
 };
 
@@ -459,7 +566,7 @@ export const exportRMSLimitsFile = (processedData: PayoutData[]) => {
   // Create RMS Limits content
   const lines = sortedData.map(row => {
     const segment = row.Segment === 'MCX' ? 'COM' : '';
-    const amount = (row.Difference);
+    const amount = Math.round(row.Difference);
     return `${row.UCC}||${segment}||${amount}|||||||||||||no`;
   });
 
@@ -484,7 +591,7 @@ export const exportmcxglobefile = (processedData: PayoutData[]): string => {
 
   // Format each record
   const mcxContent = mcxOkData.map(row => 
-    `${currentDate},CO,8090,46365,,${row.UCC},C,${Math.round(row.Pay)},,,,,,,D`
+    `${currentDate},CO,8090,46365,,${row.UCC},C,${(row.Pay)},,,,,,,D`
   ).join('\n');
 
   // Create header
@@ -492,4 +599,48 @@ export const exportmcxglobefile = (processedData: PayoutData[]): string => {
     'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENTS AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
 
   return header + mcxContent + '\n';
+};
+
+export const exportNSEGlobeFile = (processedData: PayoutData[]): string => {
+  // Filter only NSE segments (CM, FO, and combined CM+FO) with OK status
+  const nseOkData = processedData.filter(
+    row => (row.Segment === 'CM' || row.Segment === 'FO' || row.Segment === 'CM+FO') && 
+           row.Status === 'OK'
+  );
+
+  if (nseOkData.length === 0) return '';
+
+  // Get current date in DD-MMM-YYYY format
+  const currentDate = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }).replace(/ /g, '-');
+
+  const lines = [];
+
+  for (const row of nseOkData) {
+    if (row.Segment === 'CM' || row.Segment === 'FO') {
+      // For single segments, use the difference amount directly
+      lines.push(
+        `${currentDate},${row.Segment},M50302,90221,,${row.UCC},C,${formatNumber(row.Difference)},,,,,,,D`
+      );
+    } else if (row.Segment === 'CM+FO') {
+      // For combined segments, split into CM and FO with appropriate amounts
+      const cmAmount = 0; // Always 0 for CM segment in combined cases
+      const foAmount = row.Difference; // Full amount goes to FO
+      
+      lines.push(
+        `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatNumber(cmAmount)},,,,,,,D`
+      );
+      lines.push(
+        `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatNumber(foAmount)},,,,,,,D`
+      );
+    }
+  }
+
+  // Add header
+  const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION';
+  
+  return [header, ...lines].join('\n');
 };

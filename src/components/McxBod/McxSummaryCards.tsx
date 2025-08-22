@@ -64,7 +64,7 @@ const NseFoSummaryCards: React.FC<NseFoSummaryCardsProps> = ({ processedData }) 
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-purple-600 flex items-center">
             <Banknote className="h-4 w-4 mr-2" />
-            Pro Fund
+            Globe Pro Fund
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -146,7 +146,7 @@ const NseFoSummaryCards: React.FC<NseFoSummaryCardsProps> = ({ processedData }) 
                 processedData?.summary.nmass < 0 ? "text-white" : ""
               }`}
             />
-            NMASS Value
+            BaNCS Value
           </CardTitle>
         </CardHeader>
         <CardContent>
