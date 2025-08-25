@@ -107,10 +107,7 @@ const AppContent = () => {
           path="/morning-bod/nse-cd" 
           element={
             <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-slate-700">CD</h2>
-                <p className="text-slate-500 mt-2">CD analysis coming soon...</p>
-              </div>
+              <NseCm />
             </ProtectedRoute>
           } 
         />

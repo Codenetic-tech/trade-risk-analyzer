@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
-import { Upload, Download, FileSpreadsheet, RefreshCw, Search, Check, X } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, RefreshCw, Search, Check, X, Save, Edit3 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -189,10 +190,10 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
   );
 };
 
-
 const Payout: React.FC = () => {
   const [payoutData, setPayoutData] = useState<PayoutData[]>([]);
   const [ledgerData, setLedgerData] = useState<LedgerData>({});
+  const [jvCodes, setJvCodes] = useState<Set<string>>(new Set()); // Add JV codes state
   const [duplicates, setDuplicates] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -219,33 +220,82 @@ const Payout: React.FC = () => {
     direction: 'asc',
   });
 
-  // Processed data with ledger and status
-  const processedData = useMemo(() => {
-    return processDataWithLedger(payoutData, ledgerData);
-  }, [payoutData, ledgerData]);
+  // Editing state for Pay amount
+  const [editingPay, setEditingPay] = useState<string | null>(null);
+  const [tempPayValue, setTempPayValue] = useState<number>(0);
 
-  const handleProcessFiles = async (files: File[]) => {
-    if (!files || files.length === 0) {
-      toast({
-        title: "Missing Files",
-        description: "Please select payout files to process",
-        variant: "destructive",
-      });
-      return;
+  // Add this state to track manual status overrides
+  const [manualStatusOverrides, setManualStatusOverrides] = useState<{[key: string]: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK'}>({});
+
+  // Add this handler function for toggling status
+  const handleToggleStatus = (ucc: string, currentStatus: string) => {
+    let newStatus: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK';
+    
+    // Define toggle logic for all status types
+    switch (currentStatus) {
+      case 'OK':
+        newStatus = 'Not OK';
+        break;
+      case 'Not OK':
+        newStatus = 'OK';
+        break;
+      case 'JV CODE OK':
+        newStatus = 'JV CODE Not OK';
+        break;
+      case 'JV CODE Not OK':
+        newStatus = 'JV CODE OK';
+        break;
+      default:
+        newStatus = 'OK'; // fallback
     }
+    
+    setManualStatusOverrides(prev => ({
+      ...prev,
+      [ucc]: newStatus
+    }));
+
+    toast({
+      title: "Status Updated",
+      description: `Status for UCC ${ucc} changed from ${currentStatus} to ${newStatus}`,
+    });
+  };
+
+  // Update the processDataWithLedger call to include manual overrides
+  const processedData = useMemo(() => {
+    const baseProcessedData = processDataWithLedger(payoutData, ledgerData, jvCodes);
+    
+    // Apply manual status overrides
+    return baseProcessedData.map(row => ({
+      ...row,
+      Status: manualStatusOverrides[row.UCC] || row.Status,
+      ManualStatus: manualStatusOverrides[row.UCC] // Keep track of manual changes
+    }));
+  }, [payoutData, ledgerData, jvCodes, manualStatusOverrides]);
+
+    const handleProcessFiles = async (files: File[]) => {
+      if (!files || files.length === 0) {
+        toast({
+          title: "Missing Files",
+          description: "Please select payout files to process",
+          variant: "destructive",
+        });
+        return;
+      }
 
     setIsProcessing(true);
     setIsLoading(true);
 
     try {
-      const { payoutData, ledgerData, duplicates } = await processFiles(files); // Get duplicates from processFiles
+      // Updated to destructure jvCodes from the result
+      const { payoutData, ledgerData, duplicates, jvCodes } = await processFiles(files);
       setPayoutData(payoutData);
       setLedgerData(ledgerData);
-      setDuplicates(duplicates); // Set duplicates state
+      setDuplicates(duplicates);
+      setJvCodes(jvCodes); // Set JV codes state
       
       toast({
         title: "Processing Complete",
-        description: `Processed ${payoutData.length} payout records and ${Object.keys(ledgerData).length} ledger records`,
+        description: `Processed ${payoutData.length} payout records, ${Object.keys(ledgerData).length} ledger records, and ${jvCodes.size} JV codes`,
       });
     } catch (error: any) {
       console.error('Error processing files:', error);
@@ -299,10 +349,10 @@ const Payout: React.FC = () => {
       return;
     }
 
-        // Get date for filename (DDMMYYYY)
+    // Get date for filename (DDMMYYYY)
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: getMonth() returns 0-11
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
@@ -335,15 +385,24 @@ const Payout: React.FC = () => {
       return;
     }
 
-        // Get date for filename (DDMMYYYY)
+    // Get date for filename (DDMMYYYY)
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getDate() + 1).padStart(2, '0'); // Months are 0-indexed
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: getMonth() returns 0-11
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
-    const nseglobeContent = exportNSEGlobeFile(processedData);
+    const nseglobeContent = exportNSEGlobeFile(processedData,ledgerData);
     
+    if (!nseglobeContent) {
+      toast({
+        title: "No NSE Data",
+        description: "No NSE records with OK status to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Create and download file
     const blob = new Blob([nseglobeContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -388,8 +447,52 @@ const Payout: React.FC = () => {
     setSortConfig({ key, direction });
   };
 
+  // Handle double-click to start editing Pay amount
+  const handleDoubleClickPay = (ucc: string, payAmount: number) => {
+    setEditingPay(ucc);
+    setTempPayValue(payAmount);
+  };
+
+  // Handle pay amount change during editing
+  const handlePayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTempPayValue(parseFloat(e.target.value) || 0);
+  };
+
+  // Save edited pay amount and recalculate everything
+  const handleSavePayEdit = (ucc: string) => {
+    // Find the original row
+    const originalRow = payoutData.find(row => row.UCC === ucc);
+    if (!originalRow) {
+      toast({
+        title: "Error",
+        description: `Row with UCC ${ucc} not found.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Update the specific row in payoutData
+    const updatedPayoutData = payoutData.map(row => 
+      row.UCC === ucc 
+        ? { 
+            ...row, 
+            Pay: tempPayValue
+          } 
+        : row
+    );
+
+    // Update state
+    setPayoutData(updatedPayoutData);
+    setEditingPay(null);
+
+    toast({
+      title: "Pay Amount Updated",
+      description: `Pay amount for UCC ${ucc} updated to ₹${formatNumber(tempPayValue)}`,
+    });
+  };
+
   // Calculate summary statistics
- const summary = useMemo(() => {
+  const summary = useMemo(() => {
     return calculateSummary(processedData, duplicates);
   }, [processedData, duplicates]);
 
@@ -510,24 +613,14 @@ const Payout: React.FC = () => {
         onFilesSelected={handleProcessFiles}
         multiple={true}
         accept=".xlsx,.xls,.csv,.txt"
-        description="Upload MCX, FO, CM payout files, Ledger file, and MRG file"
+        description="Upload MCX, FO, CM payout files, Ledger file, JV Code file, and MRG file"
       />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-        <Card className="shadow-sm border-blue-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-600">Total Records</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-700">
-              {summary.totalRecords}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Summary Cards - Updated to include JV code counts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
         <Card className="shadow-sm border-green-100">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600">Total Payout Amount</CardTitle>
+            <CardTitle className="text-sm font-medium text-green-600">Total Payout</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-700">
@@ -537,9 +630,45 @@ const Payout: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+        <Card className="shadow-sm border-indigo-100">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-indigo-600">FO Total</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-indigo-700">
+            {summary.totalRecords > 0 
+              ? `₹${formatNumber(summary.totalFOAmount)}` 
+              : '₹0.00'}
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="shadow-sm border-cyan-100">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-cyan-600">CM Total</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-cyan-700">
+            {summary.totalRecords > 0 
+              ? `₹${formatNumber(summary.totalCMAmount)}` 
+              : '₹0.00'}
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="shadow-sm border-red-100">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-red-600">MCX Total</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-red-700">
+            {summary.totalRecords > 0 
+              ? `₹${formatNumber(summary.totalMCXAmount)}` 
+              : '₹0.00'}
+          </div>
+        </CardContent>
+      </Card>
         <Card className="shadow-sm border-purple-100">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-purple-600">Total Ledger Balance</CardTitle>
+            <CardTitle className="text-sm font-medium text-purple-600">Ledger Balance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-700">
@@ -555,23 +684,23 @@ const Payout: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-teal-700">
-              {summary.okCount}
+              {summary.okCounts}
             </div>
           </CardContent>
         </Card>
         <Card className="shadow-sm border-rose-100">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-rose-600">Not OK Status</CardTitle>
+            <CardTitle className="text-sm font-medium text-rose-600">Not OK</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-rose-700">
-              {summary.notOkCount}
+              {summary.notOkCounts}
             </div>
           </CardContent>
         </Card>
         <Card className="shadow-sm border-amber-100">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-amber-600">Duplicate UCCs</CardTitle>
+            <CardTitle className="text-sm font-medium text-amber-600">Duplicates</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-700">
@@ -581,7 +710,7 @@ const Payout: React.FC = () => {
         </Card>
       </div>
 
-      {/* Advanced Filters */}
+      {/* Advanced Filters - Updated to include JV code statuses */}
       <AdvancedFilters
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -595,7 +724,7 @@ const Payout: React.FC = () => {
             id: 'status', 
             label: 'Status', 
             type: 'select',
-            options: ['OK', 'Not OK']
+            options: ['OK', 'Not OK', 'JV CODE OK', 'JV CODE Not OK']
           },
           { 
             id: 'payRange', 
@@ -616,7 +745,7 @@ const Payout: React.FC = () => {
                 `(${filteredData.length} of ${processedData.length} records)`}
             </CardTitle>
             <div className="space-x-2 flex flex-wrap gap-2">
-                <Button 
+              <Button 
                 onClick={handlenseglobe} 
                 className="bg-green-600 hover:bg-green-700"
                 disabled={processedData.length === 0}
@@ -624,7 +753,7 @@ const Payout: React.FC = () => {
                 <Download className="h-4 w-4 mr-2" />
                 Globe NSE
               </Button>
-                <Button 
+              <Button 
                 onClick={handlemcxglobe} 
                 className="bg-green-600 hover:bg-green-700"
                 disabled={processedData.length === 0}
@@ -787,19 +916,20 @@ const Payout: React.FC = () => {
                       )}
                     </button>
                   </TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
                       <p className="mt-2 text-slate-600">Processing files...</p>
                     </TableCell>
                   </TableRow>
                 ) : processedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <FileSpreadsheet className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No Data Processed Yet
@@ -818,7 +948,7 @@ const Payout: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <Search className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No matching records
@@ -841,7 +971,36 @@ const Payout: React.FC = () => {
                           {row.Segment}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(row.Pay)}</TableCell>
+                      
+                      {/* Editable Pay Amount */}
+                      <TableCell 
+                        className="text-right font-mono text-sm cursor-pointer hover:bg-blue-50 transition-colors"
+                        onDoubleClick={() => handleDoubleClickPay(row.UCC, row.Pay)}
+                        title="Double-click to edit pay amount"
+                      >
+                        {editingPay === row.UCC ? (
+                          <div className="flex items-center justify-end">
+                            <Input
+                              type="number"
+                              value={tempPayValue}
+                              onChange={handlePayChange}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSavePayEdit(row.UCC);
+                                if (e.key === 'Escape') setEditingPay(null);
+                              }}
+                              className="text-right w-32"
+                              step="0.01"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end">
+                            <span>{formatNumber(row.Pay)}</span>
+                            <Edit3 className="h-3 w-3 ml-1 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        )}
+                      </TableCell>
+                      
                       <TableCell className="text-right font-mono">{row.LedgerBalance ? formatNumber(row.LedgerBalance) : '0'}</TableCell>
                       <TableCell className="text-right font-mono">{row.NSETotal ? formatNumber(row.NSETotal) : '0'}</TableCell>
                       <TableCell className="text-right font-mono">{row.MCXTotal ? formatNumber(row.MCXTotal) : '0'}</TableCell>
@@ -856,15 +1015,70 @@ const Payout: React.FC = () => {
                           ? formatNumber(row.Difference) 
                           : '0'}
                       </TableCell>
-                      <TableCell>
+                      
+                      {/* Updated Status Display to handle JV CODE statuses */}
+                     <TableCell>
+                    <div className="flex items-center justify-between">
+                      <div>
                         {row.Status === 'OK' ? (
                           <span className="flex items-center text-green-600">
                             <Check className="h-4 w-4 mr-1" /> OK
                           </span>
-                        ) : (
+                        ) : row.Status === 'Not OK' ? (
                           <span className="flex items-center text-red-600">
                             <X className="h-4 w-4 mr-1" /> Not OK
                           </span>
+                        ) : row.Status === 'JV CODE OK' ? (
+                          <span className="flex items-center text-blue-600">
+                            <Check className="h-4 w-4 mr-1" /> JV CODE OK
+                          </span>
+                        ) : row.Status === 'JV CODE Not OK' ? (
+                          <span className="flex items-center text-orange-600">
+                            <X className="h-4 w-4 mr-1" /> JV CODE Not OK
+                          </span>
+                        ) : (
+                          <span className="flex items-center text-gray-600">
+                            <X className="h-4 w-4 mr-1" /> Unknown
+                          </span>
+                        )}
+                        {/* Show indicator for manually changed status */}
+                        {row.ManualStatus && (
+                          <span className="text-xs text-purple-600 ml-1">(Manual)</span>
+                        )}
+                      </div>
+                      
+                      {/* Toggle button - now shows for all status types */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleToggleStatus(row.UCC, row.Status)}
+                        className="ml-2 h-6 w-6 p-0 hover:bg-slate-100"
+                        title="Click to toggle status"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                      
+                      {/* Save/Cancel Actions */}
+                      <TableCell>
+                        {editingPay === row.UCC && (
+                          <div className="flex space-x-2">
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleSavePayEdit(row.UCC)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => setEditingPay(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

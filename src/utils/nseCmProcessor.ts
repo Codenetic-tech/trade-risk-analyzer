@@ -283,7 +283,7 @@ export const processNseCmFiles = async (files: {
       console.log(`Processing ${ucc}: Ledger=${ledgerAmount}, Globe=${globeAmount}, Difference=${difference}`);
 
       // Skip records with zero difference
-      if (Math.abs(difference) <= 0.01) {
+      if (Math.abs(difference) <= 0) {
         console.log(`Skipping ${ucc} - zero difference`);
         return;
       }

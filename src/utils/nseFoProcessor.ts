@@ -306,7 +306,7 @@ export const processNseFoFiles = async (files: {
       }
 
       // SKIP LOGIC: Skip if difference=0 AND both amounts=0, EXCEPT if there's CC01 margin
-      const hasZeroDifference = Math.abs(difference) <= 0.01;
+      const hasZeroDifference = Math.abs(difference) <= 0;
       const hasBothAmountsZero = (ledgerAmount === 0 && globeAmount === 0);
       const hasCC01Value = cc01Margin > 0;
       
@@ -319,7 +319,7 @@ export const processNseFoFiles = async (files: {
       let action: 'U' | 'D' = ledgerAmount > globeAmount ? 'U' : 'D';
       
       // Only add to upgrade/downgrade totals if there's an actual difference (for output file calculation)
-      if (Math.abs(difference) > 0.01) {
+      if (Math.abs(difference) > 0) {
         if (action === 'U') {
           upgradeTotal += difference;
         } else {
@@ -341,7 +341,7 @@ export const processNseFoFiles = async (files: {
       });
 
       // Only create output records for records with actual differences (output file logic unchanged)
-      if (Math.abs(difference) > 0.01) {
+      if (Math.abs(difference) > 0) {
         outputRecords.push({
           currentDate,
           segment: 'FO',

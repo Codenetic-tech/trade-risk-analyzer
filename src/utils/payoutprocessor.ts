@@ -9,12 +9,13 @@ export interface PayoutData {
   WebLogin: string;
   Segment: string;
   LedgerBalance?: number;
-  Status?: 'OK' | 'Not OK';
+  Status?: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK';
   NSETotal?: number;
   MCXTotal?: number;
   Difference?: number;
   Margin?: number;
   NSESpan?: number;
+  ManualStatus?: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK'; // Add this line
 }
 
 export interface LedgerData {
@@ -156,6 +157,67 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerData> => {
   });
 };
 
+export const parseJVCodeFile = async (file: File): Promise<Set<string>> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+          header: 1,
+          defval: '',
+          raw: false
+        });
+        
+        // Find header row containing "UCC"
+        const headerRowIndex = (jsonData as any[]).findIndex((row: any) => 
+          Array.isArray(row) && row.some((cell: any) => 
+            String(cell).toLowerCase().includes('ucc')
+          )
+        );
+        
+        if (headerRowIndex === -1) {
+          throw new Error('Could not find UCC header in JV code file');
+        }
+        
+        const headers = (jsonData[headerRowIndex] as string[]);
+        const uccColumnIndex = headers.findIndex(header => 
+          String(header).toLowerCase().includes('ucc')
+        );
+        
+        if (uccColumnIndex === -1) {
+          throw new Error('Could not find UCC column in JV code file');
+        }
+        
+        const jvCodes = new Set<string>();
+        
+        // Process data rows
+        for (let i = headerRowIndex + 1; i < (jsonData as any[]).length; i++) {
+          const row = jsonData[i] as any[];
+          if (!row || row.length === 0) continue;
+          
+          const uccValue = String(row[uccColumnIndex] || '').trim();
+          if (uccValue) {
+            jvCodes.add(uccValue);
+          }
+        }
+        
+        console.log(`Parsed ${jvCodes.size} JV codes:`, Array.from(jvCodes));
+        resolve(jvCodes);
+      } catch (error) {
+        console.error('Error parsing JV code file:', error);
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read JV code file'));
+    reader.readAsArrayBuffer(file);
+  });
+};
+
 export const parseMrgFile = async (file: File): Promise<{[key: string]: number}> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -249,6 +311,7 @@ export const processFiles = async (files: File[]) => {
   let ledgerData: LedgerData = {};
   let marginData: {[key: string]: number} = {};
   let nseSpanData: {[key: string]: number} = {};
+  let jvCodes: Set<string> = new Set();
   
   // Process each file
   for (const file of files) {
@@ -256,6 +319,8 @@ export const processFiles = async (files: File[]) => {
     
     if (fileName.includes('ledger')) {
       ledgerData = await parseLedgerExcel(file);
+    } else if (fileName.includes('jv code') || fileName.includes('jvcode')) {
+      jvCodes = await parseJVCodeFile(file);
     } else if (fileName.includes('mrg')) {
       marginData = await parseMrgFile(file);
     } else if (fileName.includes('mg13') || fileName.includes('f_mg13')) {
@@ -410,7 +475,7 @@ export const processFiles = async (files: File[]) => {
 
   console.log(`Final processed data count: ${processedData.length}`);
   
-  return { payoutData: processedData, ledgerData, duplicates };
+  return { payoutData: processedData, ledgerData, duplicates, jvCodes };
 };
 
 export const exportProcessedData = (processedData: PayoutData[]) => {
@@ -446,17 +511,54 @@ export const formatNumber = (num: number) => {
 
 export const processDataWithLedger = (
   payoutData: PayoutData[], 
-  ledgerData: LedgerData
+  ledgerData: LedgerData,
+  jvCodes?: Set<string>
 ): PayoutData[] => {
   return payoutData.map(payout => {
     const ledgerEntry = ledgerData[payout.UCC];
     let ledgerBalance = 0;
-    let status: 'OK' | 'Not OK' = 'Not OK';
+    let status: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK' = 'Not OK';
     let nseTotal = 0;
     let mcxTotal = 0;
     let difference = 0;
 
-    if (ledgerEntry) {
+    // Check if UCC is in JV codes first
+    if (jvCodes && jvCodes.has(payout.UCC)) {
+      if (ledgerEntry) {
+        // Calculate NSE total (CM + FO + CDS)
+        nseTotal = (ledgerEntry.nseCm || 0) + 
+                   (ledgerEntry.nseFo || 0) + 
+                   (ledgerEntry.nseCds || 0);
+        
+        // Get MCX total
+        mcxTotal = ledgerEntry.mcx || 0;
+        
+        // Determine segment-specific balance
+        switch (payout.Segment) {
+          case 'MCX':
+            ledgerBalance = Math.abs(ledgerEntry.mcx);
+            difference = mcxTotal - payout.Pay;
+            break;
+          case 'CM':
+            ledgerBalance = Math.abs(ledgerEntry.nseCm);
+            difference = nseTotal - payout.Pay;
+            break;
+          case 'FO':
+            ledgerBalance = Math.abs(ledgerEntry.nseFo);
+            difference = nseTotal - payout.Pay;
+            break;
+          case 'CM+FO':
+            ledgerBalance = ledgerEntry.nseCm + ledgerEntry.nseFo;
+            difference = nseTotal - payout.Pay;
+            break;
+        }
+        
+        status = 'JV CODE OK';
+      } else {
+        status = 'JV CODE Not OK';
+      }
+    } else if (ledgerEntry) {
+      // Regular processing for non-JV codes
       // Calculate NSE total (CM + FO + CDS)
       nseTotal = (ledgerEntry.nseCm || 0) + 
                  (ledgerEntry.nseFo || 0) + 
@@ -482,7 +584,7 @@ export const processDataWithLedger = (
           break;
       }
       
-       // Calculate available balance based on segment
+      // Calculate available balance based on segment
       let availableBalance = ledgerBalance;
       
       if (payout.Segment === 'MCX') {
@@ -528,33 +630,81 @@ export const processDataWithLedger = (
 export const calculateSummary = (processedData: PayoutData[], duplicates: string[]) => {
   let okCount = 0;
   let notOkCount = 0;
-  let totalPayout = 0;
+  let jvCodeOkCount = 0;
+  let jvCodeNotOkCount = 0;
+  let totalPayout = 0; // Only include OK and JV CODE OK records
   let totalLedgerBalance = 0;
   let totalNSESpan = 0;
+  let okCounts = 0;
+  let notOkCounts = 0;
+
+  // Segment-wise totals for NSE Globe file export amounts
+  let totalFOAmount = 0;
+  let totalCMAmount = 0;
+  let totalMCXAmount = 0;
 
   processedData.forEach(row => {
-    totalPayout += row.Pay;
+    // Only add to totalPayout if status is OK or JV CODE OK
+    if (row.Status === 'OK' || row.Status === 'JV CODE OK') {
+      totalPayout += row.Pay;
+    
+       // Calculate segment-wise export amounts (only for OK statuses)
+      if (row.Segment === 'FO') {
+        totalFOAmount += row.Pay || 0;
+      } else if (row.Segment === 'CM') {
+        totalCMAmount += row.Pay || 0;
+      } else if (row.Segment === 'CM+FO') {
+        // For combined segments: CM gets 0, FO gets full difference
+        totalCMAmount += 0;
+        totalFOAmount += row.Pay || 0;
+      } else if (row.Segment === 'MCX') {
+        totalMCXAmount += row.Pay || 0;
+      }
+    }
+    
+    
     if (row.LedgerBalance) totalLedgerBalance += row.LedgerBalance;
     if (row.NSESpan) totalNSESpan += row.NSESpan;
-    if (row.Status === 'OK') okCount++;
-    else notOkCount++;
+    
+    switch (row.Status) {
+      case 'OK':
+        okCount++;
+        break;
+      case 'Not OK':
+        notOkCount++;
+        break;
+      case 'JV CODE OK':
+        jvCodeOkCount++;
+        break;
+      case 'JV CODE Not OK':
+        jvCodeNotOkCount++;
+        break;
+    }
   });
+
+  okCounts = okCount + jvCodeOkCount;
+  notOkCounts = notOkCount + jvCodeNotOkCount;
 
   return {
     totalRecords: processedData.length,
     totalPayout,
     totalLedgerBalance,
     totalNSESpan,
-    okCount,
-    notOkCount,
+    okCounts,
+    notOkCounts,
     duplicateCount: duplicates.length,
-    duplicateUCCs: duplicates
+    duplicateUCCs: duplicates,
+    totalFOAmount,
+    totalCMAmount,
+    totalMCXAmount
   };
 };
 
 export const exportRMSLimitsFile = (processedData: PayoutData[]) => {
-  // Filter only OK status records
-  const okData = processedData.filter(row => row.Status === 'OK');
+  // Filter only OK status records (including JV CODE OK)
+  const okData = processedData.filter(row => 
+    row.Status === 'OK' || row.Status === 'JV CODE OK'
+  );
 
   // Sort so COM (MCX) segment comes first
   const sortedData = okData.sort((a, b) => {
@@ -575,9 +725,9 @@ export const exportRMSLimitsFile = (processedData: PayoutData[]) => {
 };
 
 export const exportmcxglobefile = (processedData: PayoutData[]): string => {
-  // Filter only MCX segment with OK status
+  // Filter only MCX segment with OK status (including JV CODE OK)
   const mcxOkData = processedData.filter(
-    row => row.Segment === 'MCX' && row.Status === 'OK'
+    row => row.Segment === 'MCX' && (row.Status === 'OK' || row.Status === 'JV CODE OK')
   );
 
   if (mcxOkData.length === 0) return "";
@@ -601,11 +751,11 @@ export const exportmcxglobefile = (processedData: PayoutData[]): string => {
   return header + mcxContent + '\n';
 };
 
-export const exportNSEGlobeFile = (processedData: PayoutData[]): string => {
-  // Filter only NSE segments (CM, FO, and combined CM+FO) with OK status
+export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: LedgerData): string => {
+  // Filter only NSE segments (CM, FO, and combined CM+FO) with OK status (including JV CODE OK)
   const nseOkData = processedData.filter(
     row => (row.Segment === 'CM' || row.Segment === 'FO' || row.Segment === 'CM+FO') && 
-           row.Status === 'OK'
+           (row.Status === 'OK' || row.Status === 'JV CODE OK')
   );
 
   if (nseOkData.length === 0) return '';
@@ -617,24 +767,67 @@ export const exportNSEGlobeFile = (processedData: PayoutData[]): string => {
     year: 'numeric'
   }).replace(/ /g, '-');
 
+  // Helper function to format numbers without trailing zeros
+  const formatAmount = (num: number): string => {
+    if (num === 0) return '0';
+    
+    // Convert to string and remove trailing zeros and decimal point if needed
+    return num.toString().replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+  };
+
   const lines = [];
 
   for (const row of nseOkData) {
     if (row.Segment === 'CM' || row.Segment === 'FO') {
-      // For single segments, use the difference amount directly
-      lines.push(
-        `${currentDate},${row.Segment},M50302,90221,,${row.UCC},C,${formatNumber(row.Difference)},,,,,,,D`
-      );
+      const ledgerEntry = ledgerData[row.UCC];
+      
+      if (ledgerEntry) {
+        // For CM/FO segments, check if CM amount is sufficient
+        if (row.Segment === 'CM') {
+          // For CM segment, check if CM ledger amount >= payout
+          if (ledgerEntry.nseCm >= row.Pay) {
+            // CM amount is sufficient, set difference in CM segment
+            const cmAmount = Number(row.Difference);
+            lines.push(
+              `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+            );
+          } else {
+            // CM amount is insufficient, set 0 in CM and difference in FO
+            lines.push(
+              `${currentDate},CM,M50302,90221,,${row.UCC},C,0,,,,,,,D`
+            );
+            const foAmount = Number(row.Difference);
+            lines.push(
+              `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
+            );
+          }
+        } else if (row.Segment === 'FO') {
+          // For FO segment, check if CM ledger amount >= payout
+          if (ledgerEntry.nseCm >= row.Pay) {
+            // CM amount is sufficient, set difference in CM segment
+            const cmAmount = Number(row.Difference);
+            lines.push(
+              `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+            );
+          } else {
+            // CM amount is insufficient, set difference in FO segment
+            const foAmount = Number(row.Difference);
+            lines.push(
+              `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
+            );
+          }
+        }
+      }
     } else if (row.Segment === 'CM+FO') {
-      // For combined segments, split into CM and FO with appropriate amounts
-      const cmAmount = 0; // Always 0 for CM segment in combined cases
-      const foAmount = row.Difference; // Full amount goes to FO
+      // For combined segments, leave as is (CM gets 0, FO gets full difference)
+      const cmAmount = 0;
+      const foAmount = Number(row.Difference);
       
       lines.push(
-        `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatNumber(cmAmount)},,,,,,,D`
+        `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
       );
       lines.push(
-        `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatNumber(foAmount)},,,,,,,D`
+        `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
       );
     }
   }
