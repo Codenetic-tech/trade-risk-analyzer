@@ -716,7 +716,8 @@ export const exportRMSLimitsFile = (processedData: PayoutData[]) => {
   // Create RMS Limits content
   const lines = sortedData.map(row => {
     const segment = row.Segment === 'MCX' ? 'COM' : '';
-    const amount = Math.round(row.Difference);
+    // Use Math.max to ensure amount is at least 0
+    const amount = Math.max(0, Math.round(row.Difference));
     return `${row.UCC}||${segment}||${amount}|||||||||||||no`;
   });
 
@@ -752,7 +753,6 @@ export const exportmcxglobefile = (processedData: PayoutData[]): string => {
 };
 
 export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: LedgerData): string => {
-  // Filter only NSE segments (CM, FO, and combined CM+FO) with OK status (including JV CODE OK)
   const nseOkData = processedData.filter(
     row => (row.Segment === 'CM' || row.Segment === 'FO' || row.Segment === 'CM+FO') && 
            (row.Status === 'OK' || row.Status === 'JV CODE OK')
@@ -760,19 +760,21 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
 
   if (nseOkData.length === 0) return '';
 
-  // Get current date in DD-MMM-YYYY format
   const currentDate = new Date().toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric'
   }).replace(/ /g, '-');
 
-  // Helper function to format numbers without trailing zeros
+  // Helper function to format numbers with exactly two decimals, removing trailing zeros
   const formatAmount = (num: number): string => {
-    if (num === 0) return '0';
+    // Ensure amount is at least 0
+    const clampedNum = Math.max(0, num);
+    // Round to two decimal places and convert to string
+    const formatted = clampedNum.toFixed(2);
     
-    // Convert to string and remove trailing zeros and decimal point if needed
-    return num.toString().replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+    // Remove trailing zeros and optional decimal point if not needed
+    return formatted.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
   };
 
   const lines = [];
@@ -786,17 +788,17 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
         if (row.Segment === 'CM') {
           // For CM segment, check if CM ledger amount >= payout
           if (ledgerEntry.nseCm >= row.Pay) {
-            // CM amount is sufficient, set difference in CM segment
-            const cmAmount = Number(row.Difference);
+            // CM amount is sufficient, set difference in CM segment (clamped to 0)
+            const cmAmount = Math.max(0, Number(row.Difference));
             lines.push(
               `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
           } else {
-            // CM amount is insufficient, set 0 in CM and difference in FO
+            // CM amount is insufficient, set 0 in CM and difference in FO (clamped to 0)
             lines.push(
               `${currentDate},CM,M50302,90221,,${row.UCC},C,0,,,,,,,D`
             );
-            const foAmount = Number(row.Difference);
+            const foAmount = Math.max(0, Number(row.Difference));
             lines.push(
               `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
             );
@@ -804,14 +806,14 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
         } else if (row.Segment === 'FO') {
           // For FO segment, check if CM ledger amount >= payout
           if (ledgerEntry.nseCm >= row.Pay) {
-            // CM amount is sufficient, set difference in CM segment
-            const cmAmount = Number(row.Difference);
+            // CM amount is sufficient, set difference in CM segment (clamped to 0)
+            const cmAmount = Math.max(0, Number(row.Difference));
             lines.push(
               `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
           } else {
-            // CM amount is insufficient, set difference in FO segment
-            const foAmount = Number(row.Difference);
+            // CM amount is insufficient, set difference in FO segment (clamped to 0)
+            const foAmount = Math.max(0, Number(row.Difference));
             lines.push(
               `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
             );
@@ -819,9 +821,9 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
         }
       }
     } else if (row.Segment === 'CM+FO') {
-      // For combined segments, leave as is (CM gets 0, FO gets full difference)
+      // For combined segments, leave as is (CM gets 0, FO gets full difference clamped to 0)
       const cmAmount = 0;
-      const foAmount = Number(row.Difference);
+      const foAmount = Math.max(0, Number(row.Difference));
       
       lines.push(
         `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
