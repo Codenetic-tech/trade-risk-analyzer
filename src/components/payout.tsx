@@ -866,6 +866,19 @@ const Payout: React.FC = () => {
                   </TableHead>
                   <TableHead className="text-right">
                     <button 
+                      onClick={() => handleSort('TotalLedger')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Total Ledger
+                      {sortConfig.key === 'TotalLedger' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
                       onClick={() => handleSort('Margin')}
                       className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
                     >
@@ -922,14 +935,14 @@ const Payout: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">
+                    <TableCell colSpan={12} className="text-center py-8">
                       <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
                       <p className="mt-2 text-slate-600">Processing files...</p>
                     </TableCell>
                   </TableRow>
                 ) : processedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">
+                    <TableCell colSpan={12} className="text-center py-8">
                       <FileSpreadsheet className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No Data Processed Yet
@@ -948,7 +961,7 @@ const Payout: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">
+                    <TableCell colSpan={12} className="text-center py-8">
                       <Search className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No matching records
@@ -1004,6 +1017,7 @@ const Payout: React.FC = () => {
                       <TableCell className="text-right font-mono">{row.LedgerBalance ? formatNumber(row.LedgerBalance) : '0'}</TableCell>
                       <TableCell className="text-right font-mono">{row.NSETotal ? formatNumber(row.NSETotal) : '0'}</TableCell>
                       <TableCell className="text-right font-mono">{row.MCXTotal ? formatNumber(row.MCXTotal) : '0'}</TableCell>
+                      <TableCell className="text-right font-mono">{row.TotalLedger ? formatNumber(row.TotalLedger) : '0'}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.Margin || 0)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.NSESpan || 0)}</TableCell>
                       <TableCell className={`text-right font-mono ${

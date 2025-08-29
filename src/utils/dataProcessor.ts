@@ -248,12 +248,13 @@ export const processFiles = async (files: {
 
       // Calculate DIFF (ALLOC TOTAL minus LED TOTAL)
       const diff = allocTotal - ledTotal;
+      const tolerance = 0.01;
 
       // Determine STATUS
       let status: 'NIL' | 'EXCESS' | 'SHORT';
-      if (ledTotal === allocTotal) {
+      if (Math.abs(ledTotal - allocTotal) < tolerance) {
         status = 'NIL';
-      } else if (ledTotal < allocTotal) {
+      } else if (allocTotal > ledTotal) {
         status = 'EXCESS';
       } else {
         status = 'SHORT';

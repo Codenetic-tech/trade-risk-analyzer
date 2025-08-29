@@ -15,7 +15,8 @@ export interface PayoutData {
   Difference?: number;
   Margin?: number;
   NSESpan?: number;
-  ManualStatus?: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK'; // Add this line
+  ManualStatus?: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK';
+  TotalLedger?: number;
 }
 
 export interface LedgerData {
@@ -620,6 +621,7 @@ export const processDataWithLedger = (
       Status: status,
       NSETotal: nseTotal,
       MCXTotal: mcxTotal,
+      TotalLedger: nseTotal + mcxTotal,
       Difference: difference,
       Margin: payout.Margin,
       NSESpan: payout.NSESpan

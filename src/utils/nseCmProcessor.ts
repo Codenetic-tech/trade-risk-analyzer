@@ -282,11 +282,6 @@ export const processNseCmFiles = async (files: {
       
       console.log(`Processing ${ucc}: Ledger=${ledgerAmount}, Globe=${globeAmount}, Difference=${difference}`);
 
-      // Skip records with zero difference
-      if (Math.abs(difference) <= 0) {
-        console.log(`Skipping ${ucc} - zero difference`);
-        return;
-      }
 
       // Skip records where both ledger and globe amounts are zero
       if (ledgerAmount === 0 && globeAmount === 0) {
@@ -297,11 +292,14 @@ export const processNseCmFiles = async (files: {
       // Correct action logic: if ledger > globe = U, if ledger < globe = D
       let action: 'U' | 'D' = ledgerAmount > globeAmount ? 'U' : 'D';
       
-      if (action === 'U') {
-        upgradeTotal += Math.abs(difference);
-      } else {
-        downgradeTotal += Math.abs(difference);
-      }
+        // Only update totals for non-zero differences
+        if (Math.abs(difference) > 0) {
+          if (action === 'U') {
+            upgradeTotal += Math.abs(difference);
+          } else {
+            downgradeTotal += Math.abs(difference);
+          }
+        }
 
       processedData.push({
         clicode: ucc,
@@ -311,23 +309,26 @@ export const processNseCmFiles = async (files: {
         difference,
       });
 
-      outputRecords.push({
-        currentDate,
-        segment: 'CM',
-        cmCode: 'M50302',
-        tmCode: '90221',
-        cpCode: '',
-        clicode: ucc,
-        accountType: 'C',
-        amount: ledgerAmount, // Use ledger amount in output
-        filler1: '',
-        filler2: '',
-        filler3: '',
-        filler4: '',
-        filler5: '',
-        filler6: '',
-        action: action,
-      });
+      // Only add to outputRecords for non-zero differences
+      if (Math.abs(difference) > 0) {
+        outputRecords.push({
+          currentDate,
+          segment: 'CM',
+          cmCode: 'M50302',
+          tmCode: '90221',
+          cpCode: '',
+          clicode: ucc,
+          accountType: 'C',
+          amount: ledgerAmount, // Use ledger amount in output
+          filler1: '',
+          filler2: '',
+          filler3: '',
+          filler4: '',
+          filler5: '',
+          filler6: '',
+          action: action,
+        });
+      }
     });
 
     // 2. Add records for globe file clients missing in risk file (but only if they have allocations > 0)
