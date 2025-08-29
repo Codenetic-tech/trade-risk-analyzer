@@ -53,6 +53,13 @@ const allMenuItems = [
     ]
   },
   {
+    title: 'Morning Intersegment',
+    url: '/morning-intersegment',
+    icon: Clock,
+    color: 'text-purple-600',
+    roles: ['Risk Manager', 'Analyst'] // Only Risk Manager and Analyst
+  },
+  {
     title: 'Reports',
     url: '/reports',
     icon: FileSpreadsheet,

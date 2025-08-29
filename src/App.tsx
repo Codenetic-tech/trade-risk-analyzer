@@ -15,6 +15,7 @@ import Layout from './components/Layout';
 import NseFo from './components/NseFo';
 import Payout from './components/payout';
 import Mcx from './components/Mcx';
+import MorningIntersegment from './components/MorningIntersegment';
 
 const queryClient = new QueryClient();
 
@@ -132,6 +133,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <EveningIntersegment />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/morning-intersegment" 
+          element={
+            <ProtectedRoute>
+              <MorningIntersegment />
             </ProtectedRoute>
           } 
         />
