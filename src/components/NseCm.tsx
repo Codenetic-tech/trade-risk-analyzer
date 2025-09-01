@@ -51,6 +51,15 @@ const NseCm: React.FC = () => {
   const [riskFile, setRiskFile] = useState<File | null>(null);
   const [nseFile, setNseFile] = useState<File | null>(null);
 
+  // Get current date in DD-MMM-YYYY format
+  const getCurrentDate = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   // Handle file upload
   const handleFilesUploaded = async (files: { 
     risk: File | null; 
@@ -108,6 +117,7 @@ const NseCm: React.FC = () => {
   
     // Explicitly type the action as 'U' | 'D'
     const newAction: 'U' | 'D' = tempLedgerValue > globeAmount ? 'U' : 'D';
+    const newDifference = tempLedgerValue - globeAmount;
 
     // Update the specific row
     const updatedData = processedData.data.map(row => 
@@ -115,7 +125,7 @@ const NseCm: React.FC = () => {
         ? { 
             ...row, 
             ledgerAmount: tempLedgerValue,
-            difference: tempLedgerValue - globeAmount,
+            difference: newDifference,
             action: newAction
           } 
         : row
@@ -148,24 +158,76 @@ const NseCm: React.FC = () => {
     };
 
     // Update output records
-    const updatedOutputRecords = processedData.outputRecords.map(record => {
-      if (record.clicode === clicode) {
-        return {
-          ...record,
-          amount: tempLedgerValue,
-          action: newAction
-        };
+    let updatedOutputRecords = [...processedData.outputRecords];
+    
+    // Find if this record already exists in output
+    const existingRecordIndex = updatedOutputRecords.findIndex(record => 
+      record.clicode === clicode && record.accountType === 'C'
+    );
+    
+    // Only add/update if there's a difference
+    if (Math.abs(newDifference) > 0) {
+      const outputRecord: NseCmOutputRecord = {
+        currentDate: getCurrentDate(),
+        segment: 'CM',
+        cmCode: 'M50302',
+        tmCode: '90221',
+        cpCode: '',
+        clicode: clicode,
+        accountType: 'C',
+        amount: tempLedgerValue,
+        filler1: '',
+        filler2: '',
+        filler3: '',
+        filler4: '',
+        filler5: '',
+        filler6: '',
+        action: newAction,
+      };
+      
+      if (existingRecordIndex !== -1) {
+        // Update existing record
+        updatedOutputRecords[existingRecordIndex] = outputRecord;
+      } else {
+        // Add new record
+        updatedOutputRecords.push(outputRecord);
       }
-      return record;
-    });
+    } else if (existingRecordIndex !== -1) {
+      // Remove record if difference becomes zero
+      updatedOutputRecords.splice(existingRecordIndex, 1);
+    }
 
     // Update ProFund record
     const proFundAction: 'U' | 'D' = finalProFund < finalAmount ? 'U' : 'D';
-    updatedOutputRecords[0] = {
-      ...updatedOutputRecords[0],
-      amount: finalAmount,
-      action: proFundAction
-    };
+    
+    // Find ProFund record (should be the first one)
+    const proFundIndex = updatedOutputRecords.findIndex(record => record.accountType === 'P');
+    if (proFundIndex !== -1) {
+      updatedOutputRecords[proFundIndex] = {
+        ...updatedOutputRecords[proFundIndex],
+        amount: finalAmount,
+        action: proFundAction
+      };
+    } else {
+      // Add ProFund record if it doesn't exist
+      updatedOutputRecords.unshift({
+        currentDate: getCurrentDate(),
+        segment: 'CM',
+        cmCode: 'M50302',
+        tmCode: '90221',
+        cpCode: '',
+        clicode: '',
+        accountType: 'P',
+        amount: finalAmount,
+        filler1: '',
+        filler2: '',
+        filler3: '',
+        filler4: '',
+        filler5: '',
+        filler6: '',
+        action: proFundAction,
+      });
+    }
 
     setProcessedData({
       data: updatedData,
