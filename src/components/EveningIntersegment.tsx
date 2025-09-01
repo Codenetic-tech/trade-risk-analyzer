@@ -358,6 +358,15 @@ const EveningIntersegment: React.FC = () => {
     }
   };
 
+  // Get current date in DD-MMM-YYYY format
+  const getCurrentDate = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
 
   const downloadNSEGlobeFile = () => {
     if (processedData.length === 0) return;
@@ -368,17 +377,9 @@ const EveningIntersegment: React.FC = () => {
     const month = String(now.getMonth() + 1).padStart(2, '0'); // Fixed: use getMonth() instead of getDate()
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
-
-    // Get date for file content (DD-MMM-YYYY)
-    const currentDate = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
       
     const nseContent = processedData.map(row => {
-      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(row.nseAmount)},,,,,,,D`;
+      return `${getCurrentDate()},FO,M50302,90221,,${row.Entity},C,${Math.round(row.nseAmount)},,,,,,,D`;
     }).join('\n');
 
     const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
@@ -403,19 +404,12 @@ const EveningIntersegment: React.FC = () => {
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
-    // Get date for file content (DD-MMM-YYYY)
-    const currentDate = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
       // Return formatted row
       const mcxContent = processedData.map(row => {
-        return `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(row.mcxAmount)},,,,,,,A`;
+        return `${getCurrentDate()},CO,8090,46365,,${row.Entity},C,${Math.round(row.mcxAmount)},,,,,,,A`;
       }).join('\n');
 
-    const profundEntry = `${currentDate},CO,8090,46365,,,P,${Math.round(mcxProfundAmount)},,,,,,,A`;
+    const profundEntry = `${getCurrentDate()},CO,8090,46365,,,P,${Math.round(mcxProfundAmount)},,,,,,,A`;
 
     const header = 'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENTS AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
     const fullContent = header + mcxContent + '\n' + profundEntry;
