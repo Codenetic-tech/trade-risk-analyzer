@@ -323,12 +323,12 @@ const MorningIntersegment: React.FC = () => {
         let nseAmount, mcxAmount, kambalaNseAmount, kambalaMcxAmount;
 
         if (marginUsed === 0) {
-          mcxAmount = Math.round((cash + payin) - 100) - 1;
-          nseAmount = Math.round(nseAllocated + mcxAmount);
+          mcxAmount = Math.round((cash + payin) - 100);
+          nseAmount = Number(nseAllocated + mcxAmount).toFixed(2);
           kambalaNseAmount = Math.round((cash + payin) - 100);
           kambalaMcxAmount = -Math.round((cash + payin) - 100);
         } else if (marginUsed > 0) {
-          nseAmount = Math.round(nseAllocated + margin90);
+          nseAmount = Number(nseAllocated + margin90).toFixed(2);
           mcxAmount = margin90 - 1;
           kambalaNseAmount = Math.round(margin90);
           kambalaMcxAmount = -Math.round(margin90);
@@ -387,6 +387,16 @@ const MorningIntersegment: React.FC = () => {
     }
   };
 
+  // Get current date in DD-MMM-YYYY format
+  const getCurrentDate = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+
 
   const downloadNSEGlobeFile = () => {
     // Filter out records with kambalaNseAmount < 0
@@ -408,16 +418,8 @@ const MorningIntersegment: React.FC = () => {
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
-    // Get date for file content (DD-MMM-YYYY)
-    const currentDate = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
-      
     const nseContent = validData.map(row => {
-      return `${currentDate},FO,M50302,90221,,${row.Entity},C,${Math.round(row.nseAmount)},,,,,,,D`;
+      return `${getCurrentDate()},FO,M50302,90221,,${row.Entity},C,${(row.nseAmount)},,,,,,,U`;
     }).join('\n');
 
     const header = 'CURRENTDATE,SEGMENT,CMCODE,TMCODE,CPCODE,CLICODE,ACCOUNTTYPE,AMOUNT,FILLER1,FILLER2,FILLER3,FILLER4,FILLER5,FILLER6,ACTION\n';
@@ -457,22 +459,14 @@ const MorningIntersegment: React.FC = () => {
     const year = now.getFullYear();
     const dateString = `${day}${month}${year}`;
 
-    // Get date for file content (DD-MMM-YYYY)
-    const currentDate = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
       // Return formatted row
       const mcxContent = validData.map(row => {
-        return `${currentDate},CO,8090,46365,,${row.Entity},C,${Math.round(row.mcxAmount)},,,,,,,D`;
+        return `${getCurrentDate()},CO,8090,46365,,${row.Entity},C,${Math.round(row.mcxAmount)},,,,,,,D`;
       }).join('\n');
 
-    const profundEntry = `${currentDate},CO,8090,46365,,,P,${Math.round(mcxProfundAmount)},,,,,,,D`;
 
     const header = 'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENTS AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
-    const fullContent = header + mcxContent + '\n' + profundEntry;
+    const fullContent = header + mcxContent + '\n';
 
     const blob = new Blob([fullContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
@@ -838,7 +832,7 @@ const MorningIntersegment: React.FC = () => {
                 `(${filteredData.length} of ${processedData.length} records)`}
             </CardTitle>
             <div className="space-x-2 flex flex-wrap gap-2">
-              {/* MCX Profund Input */}
+              {/* MCX Profund Input
               {processedData.length > 0 && (
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                   <div className="flex items-center">
@@ -855,7 +849,7 @@ const MorningIntersegment: React.FC = () => {
                     = ₹{new Intl.NumberFormat('en-IN').format(mcxProfundAmount)}
                   </div>
                 </div>
-              )}
+              )}*/}
               <Button 
                 onClick={downloadNSEGlobeFile} 
                 className="bg-green-600 hover:bg-green-700"
