@@ -72,7 +72,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                 <span>Kambala File</span>
               </CardTitle>
-              <CardDescription>Upload the Kambala Excel file (.xlsx)</CardDescription>
+              <CardDescription>Upload View Limits M DDMMYYYY (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {kambalaFile ? (
@@ -170,7 +170,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                 <FileSpreadsheet className="h-5 w-5 text-purple-600" />
                 <span>Intersegment Code File</span>
               </CardTitle>
-              <CardDescription>Upload the code Excel file (.xlsx)</CardDescription>
+              <CardDescription>Upload MCX TO NSE DDMMYYYY (.xlsx)</CardDescription>
             </CardHeader>
             <CardContent>
               {codeFile ? (

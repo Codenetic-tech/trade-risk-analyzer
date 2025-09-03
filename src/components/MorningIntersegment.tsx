@@ -201,13 +201,13 @@ const MorningIntersegment: React.FC = () => {
   };
   
   const todaysDate = getCurrentDateString();
-  const kambalaPattern = new RegExp(`^Morning ${todaysDate}.(xlsx|xls)$`, "i");
+  const kambalaPattern = new RegExp(`^View Limits M ${todaysDate}.(xlsx|xls)$`, "i");
   const codePattern = new RegExp(`^MCX TO NSE ${todaysDate}.(xlsx|xls)$`, "i");
 
   if (!kambalaPattern.test(kambalaFile.name)) {
     toast({
       title: "Invalid Kambala File",
-      description: `File name must be: 'Morning ${todaysDate}.xlsx'`,
+      description: `File name must be: 'View Limits M ${todaysDate}.xlsx'`,
       variant: "destructive",
     });
     return;
