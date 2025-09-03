@@ -429,7 +429,7 @@ const MorningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `90221_ALLOC_${dateString}.T0150`;  // Updated filename format
+    link.download = `90221_ALLOC_${dateString}.T0004`;  // Updated filename format
     link.click();
     window.URL.revokeObjectURL(url);
 
@@ -472,7 +472,7 @@ const MorningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `MCCLCOLL_46365_${dateString}.010`;
+    link.download = `MCCLCOLL_46365_${dateString}.003`;
     link.click();
     window.URL.revokeObjectURL(url);
 
