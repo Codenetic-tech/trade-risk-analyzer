@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RefreshCw, Download, Wifi, WifiOff } from 'lucide-react';
+import { RefreshCw, Download, Wifi, WifiOff, Upload, FileSpreadsheet, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { toast } from '@/hooks/use-toast';
+import { FileUploadModal } from './GlobeFileUploadModal';
 
 interface RealtimeData {
   Time: string;
@@ -72,6 +81,15 @@ const RealtimeFund: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'syncing'>('connected');
   const [newRecordsCount, setNewRecordsCount] = useState(0);
   const [modifiedRecordsCount, setModifiedRecordsCount] = useState(0);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof RealtimeData | '';
+    direction: 'asc' | 'desc';
+  }>({
+    key: '',
+    direction: 'asc'
+  });
   
   // Store the last fetched data to compare for changes
   const lastFetchedData = useRef<RealtimeData[]>([]);
@@ -356,6 +374,116 @@ const RealtimeFund: React.FC = () => {
     }
   };
 
+  const handleFilesUpload = async (nseFile: File, mcxFile: File): Promise<void> => {
+    if (!nseFile || !mcxFile) {
+      setError("Both NSE and MCX files are required");
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      // Parse both CSV files
+      const parseCSV = (text: string) => {
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        if (lines.length < 2) return []; // Need at least a header and one data row
+        
+        // Extract headers
+        const headers = lines[0].split(',').map(header => header.trim());
+        
+        // Parse data rows
+        return lines.slice(1).map(line => {
+          // Handle quoted values that might contain commas
+          const values = line.split(',').reduce((acc, curr) => {
+            // If the current value starts with a quote but doesn't end with one,
+            // we're in a quoted value that spans multiple segments
+            if (curr.startsWith('"') && !curr.endsWith('"')) {
+              if (acc.inQuote) {
+                acc.current += ',' + curr;
+              } else {
+                acc.inQuote = true;
+                acc.current = curr;
+              }
+            } else if (curr.endsWith('"') && acc.inQuote) {
+              acc.current += ',' + curr;
+              acc.values.push(acc.current.replace(/^"|"$/g, '')); // Remove quotes
+              acc.inQuote = false;
+              acc.current = '';
+            } else if (acc.inQuote) {
+              acc.current += ',' + curr;
+            } else {
+              acc.values.push(curr.trim());
+            }
+            return acc;
+          }, { values: [], inQuote: false, current: '' }).values;
+          
+          const row: Record<string, string> = {};
+          
+          headers.forEach((header, index) => {
+            row[header] = (values[index] || '').trim();
+          });
+          
+          return row;
+        }).filter(row => Object.keys(row).length > 0 && Object.values(row).some(val => val !== ''));
+      };
+
+      // Read and parse both files
+      const nseText = await nseFile.text();
+      const mcxText = await mcxFile.text();
+      
+      const nseData = parseCSV(nseText);
+      const mcxData = parseCSV(mcxText);
+
+      // Prepare the payload
+      const payload = {
+        source: "upload",
+        nseData,
+        mcxData,
+        timestamp: new Date().toISOString()
+      };
+
+      // Send to webhook
+      const response = await fetch('https://n8n.gopocket.in/webhook/rms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed with status: ${response.status}`);
+      }
+
+      const responseData = await response.json();
+
+      // Show success toast notification
+      toast({
+        title: "Upload Successful",
+        description: responseData.status || "Globe data updated",
+        duration: 5000,
+      });
+
+      setError(null);
+      
+      // Refresh the data
+      await fetchAllData(false);
+    } catch (error: any) {
+      console.error('Error processing files:', error);
+      setError(`Failed to process files: ${error.message}`);
+      
+      // Show error toast notification
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Auto-refresh effect
   useEffect(() => {
     // Clear existing timeout
@@ -382,6 +510,17 @@ const RealtimeFund: React.FC = () => {
     };
   }, [autoRefresh, refreshInterval, isInitialLoading]);
 
+  // Handle column sorting
+  const handleSort = (key: keyof RealtimeData) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    
+    setSortConfig({ key, direction });
+  };
+
   // Calculate summary data
   const summaryData = useMemo((): SummaryData => {
     const totalAmount = realtimeData.reduce((sum, row) => sum + parseFloat(row.Amount || '0'), 0);
@@ -403,9 +542,9 @@ const RealtimeFund: React.FC = () => {
     };
   }, [realtimeData]);
 
-  // Filter data based on search and status filters
+  // Filter and sort data based on search, status filters, and sorting
   const filteredData = useMemo(() => {
-    return realtimeData.filter(item => {
+    let data = realtimeData.filter(item => {
       const matchesSearch = 
         item.UCC.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item['Order ID'].toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -422,7 +561,40 @@ const RealtimeFund: React.FC = () => {
 
       return matchesSearch && matchesStatus;
     });
-  }, [realtimeData, searchQuery, statusFilter]);
+
+    // Update the sorting logic in the filteredData useMemo
+    if (sortConfig.key) {
+      data.sort((a, b) => {
+        // Handle numeric sorting for Amount, Pre Globe, and Allocation
+        if (sortConfig.key === 'Amount' || sortConfig.key === 'pre globe' || sortConfig.key === 'allocation') {
+          const aNum = parseFloat(a[sortConfig.key] || '0');
+          const bNum = parseFloat(b[sortConfig.key] || '0');
+          return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        
+        // Handle date sorting for Time
+        if (sortConfig.key === 'Time') {
+          const aDate = new Date(a.Time).getTime();
+          const bDate = new Date(b.Time).getTime();
+          return sortConfig.direction === 'asc' ? aDate - bDate : bDate - aDate;
+        }
+        
+        // Default string sorting for other columns
+        const aValue = a[sortConfig.key] || '';
+        const bValue = b[sortConfig.key] || '';
+        
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return data;
+  }, [realtimeData, searchQuery, statusFilter, sortConfig]);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -464,6 +636,15 @@ const RealtimeFund: React.FC = () => {
     }
   };
 
+  // Render sort indicator for table headers
+  const renderSortIndicator = (key: keyof RealtimeData) => {
+    if (sortConfig.key !== key) return null;
+    
+    return sortConfig.direction === 'asc' ? 
+      <ChevronUp className="h-4 w-4 inline ml-1" /> : 
+      <ChevronDown className="h-4 w-4 inline ml-1" />;
+  };
+
   return (
     <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -491,6 +672,19 @@ const RealtimeFund: React.FC = () => {
           </div>
           <div className="flex space-x-3">
             <Button 
+              onClick={() => setShowUploadModal(true)}
+              variant="outline"
+              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
+              Upload Globe Files
+            </Button>
+            <Button 
               onClick={() => fetchAllData(false)}
               disabled={isInitialLoading}
               variant="outline"
@@ -509,6 +703,14 @@ const RealtimeFund: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* File Upload Modal */}
+      <FileUploadModal
+        open={showUploadModal}
+        onOpenChange={setShowUploadModal}
+        onFilesSelected={handleFilesUpload}
+        isUploading={isUploading}
+      />
 
       {/* Error Alert */}
       {error && (
@@ -562,7 +764,6 @@ const RealtimeFund: React.FC = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5">5s</SelectItem>
                   <SelectItem value="10">10s</SelectItem>
                   <SelectItem value="30">30s</SelectItem>
                   <SelectItem value="60">1m</SelectItem>
@@ -677,16 +878,66 @@ const RealtimeFund: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>UCC</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Segment</TableHead>
-                  <TableHead>Gateway</TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>BackOffice</TableHead>
-                  <TableHead>Kambala</TableHead>
-                  <TableHead className="text-right">Pre Globe</TableHead>
-                  <TableHead className="text-right">Allocation</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('Time')}
+                  >
+                    Time {renderSortIndicator('Time')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('UCC')}
+                  >
+                    UCC {renderSortIndicator('UCC')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100 text-right"
+                    onClick={() => handleSort('Amount')}
+                  >
+                    Amount {renderSortIndicator('Amount')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('Seg')}
+                  >
+                    Segment {renderSortIndicator('Seg')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('Gateway')}
+                  >
+                    Gateway {renderSortIndicator('Gateway')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('Order ID')}
+                  >
+                    Order ID {renderSortIndicator('Order ID')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('BackOffice')}
+                  >
+                    BackOffice {renderSortIndicator('BackOffice')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100"
+                    onClick={() => handleSort('Kambala')}
+                  >
+                    Kambala {renderSortIndicator('Kambala')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100 text-right"
+                    onClick={() => handleSort('pre globe')}
+                  >
+                    Pre Globe {renderSortIndicator('pre globe')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-100 text-right"
+                    onClick={() => handleSort('allocation')}
+                  >
+                    Allocation {renderSortIndicator('allocation')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
