@@ -16,6 +16,7 @@ import NseFo from './components/NseFo';
 import Payout from './components/payout';
 import Mcx from './components/Mcx';
 import MorningIntersegment from './components/MorningIntersegment';
+import RealtimeFund from './components/RealtimeFund';
 
 const queryClient = new QueryClient();
 
@@ -43,7 +44,7 @@ const AppContent = () => {
           path="/dashboard" 
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <RealtimeFund />
             </ProtectedRoute>
           } 
         />
