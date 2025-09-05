@@ -562,36 +562,41 @@ const RealtimeFund: React.FC = () => {
       return matchesSearch && matchesStatus;
     });
 
-    // Update the sorting logic in the filteredData useMemo
-    if (sortConfig.key) {
-      data.sort((a, b) => {
-        // Handle numeric sorting for Amount, Pre Globe, and Allocation
-        if (sortConfig.key === 'Amount' || sortConfig.key === 'pre globe' || sortConfig.key === 'allocation') {
-          const aNum = parseFloat(a[sortConfig.key] || '0');
-          const bNum = parseFloat(b[sortConfig.key] || '0');
-          return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
-        }
-        
-        // Handle date sorting for Time
-        if (sortConfig.key === 'Time') {
-          const aDate = new Date(a.Time).getTime();
-          const bDate = new Date(b.Time).getTime();
-          return sortConfig.direction === 'asc' ? aDate - bDate : bDate - aDate;
-        }
-        
-        // Default string sorting for other columns
-        const aValue = a[sortConfig.key] || '';
-        const bValue = b[sortConfig.key] || '';
-        
-        if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
+   if (sortConfig.key) {
+  data.sort((a, b) => {
+    // Handle numeric sorting for Amount, Pre Globe, and Allocation
+    if (sortConfig.key === 'Amount' || sortConfig.key === 'pre globe' || sortConfig.key === 'allocation') {
+      const aNum = parseFloat(a[sortConfig.key] || '0');
+      const bNum = parseFloat(b[sortConfig.key] || '0');
+      return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
     }
+    
+    // Handle time sorting for Time column
+      if (sortConfig.key === 'Time') {
+        const timeToSeconds = (timeStr: string) => {
+          if (!timeStr) return 0;
+          const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+          return hours * 3600 + minutes * 60 + (seconds || 0);
+        };
+        
+        const aSeconds = timeToSeconds(a.Time);
+        const bSeconds = timeToSeconds(b.Time);
+        return sortConfig.direction === 'asc' ? aSeconds - bSeconds : bSeconds - aSeconds;
+      }
+      
+      // Default string sorting for other columns
+      const aValue = a[sortConfig.key] || '';
+      const bValue = b[sortConfig.key] || '';
+      
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }
 
     return data;
   }, [realtimeData, searchQuery, statusFilter, sortConfig]);
