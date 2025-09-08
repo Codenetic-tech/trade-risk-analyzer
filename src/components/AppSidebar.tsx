@@ -26,6 +26,7 @@ import {
   LogOut,
   User,
   ChevronLeft,
+  Wifi,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 import { toast } from '@/hooks/use-toast';
@@ -37,6 +38,13 @@ const allMenuItems = [
     url: '/dashboard',
     icon: LayoutDashboard,
     color: 'text-blue-600',
+    roles: ['Risk Manager', 'Analyst'] // All roles can see dashboard
+  },
+  {
+    title: 'GlobeFund',
+    url: '/globe',
+    icon: Wifi,
+    color: 'text-green-600',
     roles: ['Risk Manager', 'Analyst'] // All roles can see dashboard
   },
   {

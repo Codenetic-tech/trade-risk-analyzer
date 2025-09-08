@@ -17,6 +17,7 @@ import Payout from './components/payout';
 import Mcx from './components/Mcx';
 import MorningIntersegment from './components/MorningIntersegment';
 import RealtimeFund from './components/RealtimeFund';
+import GlobeFund from './components/Globe';
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <RealtimeFund />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/globe" 
+          element={
+            <ProtectedRoute>
+              <GlobeFund />
             </ProtectedRoute>
           } 
         />
