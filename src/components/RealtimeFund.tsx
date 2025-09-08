@@ -443,7 +443,7 @@ const RealtimeFund: React.FC = () => {
       };
 
       // Send to webhook
-      const response = await fetch('https://n8n.gopocket.in/webhook/rms', {
+      const response = await fetch('https://n8n.gopocket.in/webhook-test/rms1', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -571,34 +571,58 @@ const RealtimeFund: React.FC = () => {
       return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
     }
     
-    // Handle time sorting for Time column
-      if (sortConfig.key === 'Time') {
-        const timeToSeconds = (timeStr: string) => {
-          if (!timeStr) return 0;
-          const [hours, minutes, seconds] = timeStr.split(':').map(Number);
-          return hours * 3600 + minutes * 60 + (seconds || 0);
-        };
+    // Handle time sorting for Time column with new format DD-MM-YYYY-HH:MM:SS
+    if (sortConfig.key === 'Time') {
+      const parseTimeString = (timeStr: string) => {
+        if (!timeStr) return 0;
         
-        const aSeconds = timeToSeconds(a.Time);
-        const bSeconds = timeToSeconds(b.Time);
-        return sortConfig.direction === 'asc' ? aSeconds - bSeconds : bSeconds - aSeconds;
-      }
-      
-      // Default string sorting for other columns
-      const aValue = a[sortConfig.key] || '';
-      const bValue = b[sortConfig.key] || '';
-      
-      if (aValue < bValue) {
-        return sortConfig.direction === 'asc' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-  }
+        try {
+          // Split into parts: [day, month, year, time]
+          const parts = timeStr.split('-');
+          if (parts.length < 4) return 0; // Invalid format
+          
+          // Extract time components and split HH:MM:SS
+          const timeComponents = parts[3].split(':');
+          if (timeComponents.length < 3) return 0; // Invalid time
 
-    return data;
+          // Create a Date object in UTC to avoid timezone issues
+          const date = new Date(
+            parseInt(parts[2]), // Year
+            parseInt(parts[1]) - 1, // Month (0-indexed)
+            parseInt(parts[0]), // Day
+            parseInt(timeComponents[0]), // Hours
+            parseInt(timeComponents[1]), // Minutes
+            parseInt(timeComponents[2]) // Seconds
+          );
+          
+          return date.getTime(); // Return timestamp for comparison
+        } catch (error) {
+          console.error('Error parsing time:', timeStr, error);
+          return 0;
+        }
+      };
+
+      const aTimestamp = parseTimeString(a.Time);
+      const bTimestamp = parseTimeString(b.Time);
+      return sortConfig.direction === 'asc' ? aTimestamp - bTimestamp : bTimestamp - aTimestamp;
+    }
+    
+    // Default string sorting for other columns
+    const aValue = a[sortConfig.key] || '';
+    const bValue = b[sortConfig.key] || '';
+    
+    if (aValue < bValue) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+}
+
+return data;
+
   }, [realtimeData, searchQuery, statusFilter, sortConfig]);
 
   const formatNumber = (num: number) => {
