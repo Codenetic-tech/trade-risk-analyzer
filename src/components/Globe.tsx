@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -25,6 +25,7 @@ interface GlobeData {
   _id?: string;
   _isNew?: boolean;
   _isModified?: boolean;
+  _contentHash?: string;
 }
 
 interface SummaryData {
@@ -64,11 +65,56 @@ const TableCell = ({ children, className = '', ...props }: React.TdHTMLAttribute
   </td>
 );
 
+// Optimized memoized table row with better comparison
+const MemoizedTableRow = React.memo(({ row }: { row: GlobeData }) => {
+  const formatNumber = useCallback((num: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(num);
+  }, []);
+
+  return (
+    <TableRow 
+      className={`hover:bg-slate-50 transition-colors duration-200 ${
+        row._isNew ? 'bg-green-50 border-l-4 border-green-400' :
+        row._isModified ? 'bg-blue-50 border-l-4 border-blue-400' : ''
+      }`}
+    >
+      <TableCell className="font-mono text-sm">{row.allocdate}</TableCell>
+      <TableCell>{row.clrtype}</TableCell>
+      <TableCell>{row.segments}</TableCell>
+      <TableCell className="font-mono">{row.tmcode}</TableCell>
+      <TableCell className="font-mono">{row.clicode || '-'}</TableCell>
+      <TableCell>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          row.acctype === 'C' 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-blue-100 text-blue-800'
+        }`}>
+          {row.acctype === 'C' ? 'Client' : 'Proprietary'}
+        </span>
+      </TableCell>
+      <TableCell className="text-right font-mono font-semibold">
+        ₹{formatNumber(parseFloat(row.allocated || '0'))}
+      </TableCell>
+    </TableRow>
+  );
+}, (prevProps, nextProps) => {
+  // Compare using content hash for better performance
+  return prevProps.row._contentHash === nextProps.row._contentHash && 
+         prevProps.row._isNew === nextProps.row._isNew &&
+         prevProps.row._isModified === nextProps.row._isModified;
+});
+
+MemoizedTableRow.displayName = 'MemoizedTableRow';
+
 const GlobeFund: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'nse' | 'mcx'>('nse');
   const [nseGlobeData, setNseGlobeData] = useState<GlobeData[]>([]);
   const [mcxGlobeData, setMcxGlobeData] = useState<GlobeData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -84,331 +130,353 @@ const GlobeFund: React.FC = () => {
   });
 
   // Store the last fetched data to compare for changes
-  const lastFetchedNseGlobeData = useRef<GlobeData[]>([]);
-  const lastFetchedMcxGlobeData = useRef<GlobeData[]>([]);
+  const lastFetchedDataRef = useRef<{
+    nse: Map<string, string>;
+    mcx: Map<string, string>;
+  }>({
+    nse: new Map(),
+    mcx: new Map()
+  });
 
-  // Storage keys
-  const STORAGE_KEYS = {
-    nse_data: 'globe_nse_data',
-    mcx_data: 'globe_mcx_data',
-    lastUpdated: 'globe_lastUpdated',
-    searchQuery: 'globe_searchQuery',
-    activeTab: 'globe_activeTab',
-    lastFetchedNse: 'globe_lastFetchedNse',
-    lastFetchedMcx: 'globe_lastFetchedMcx'
-  };
+  // Clear flags timeout refs
+  const clearFlagsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Local storage functions
-  const setStorageItem = (key: string, value: any) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-    }
-  };
-
-  const getStorageItem = (key: string) => {
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : null;
-    } catch (error) {
-      console.error('Error reading from localStorage:', error);
-      return null;
-    }
-  };
-
-  // Generate a unique ID for each row based on its content
-  const generateRowId = (row: GlobeData): string => {
-    return `${row.name}-${row.allocdate}-${row.tmcode}-${row.clicode}-${row.allocated}`;
-  };
-
-  // Create a content hash for comparison
-  const getRowContentHash = (row: GlobeData): string => {
-    const keys = ['name', 'allocdate', 'clrtype', 'segments', 'tmcode', 'clicode', 'acctype', 'allocated'];
-    return keys.map(key => row[key] || '').join('|');
-  };
-
-  // Load data from local storage on component mount
-  useEffect(() => {
-    const loadStoredData = () => {
+  // Storage utilities with error handling
+  const storage = useMemo(() => ({
+    set: (key: string, value: any) => {
       try {
-        const storedNseData = getStorageItem(STORAGE_KEYS.nse_data);
-        const storedMcxData = getStorageItem(STORAGE_KEYS.mcx_data);
-        const storedLastUpdated = getStorageItem(STORAGE_KEYS.lastUpdated);
-        const storedSearchQuery = getStorageItem(STORAGE_KEYS.searchQuery);
-        const storedActiveTab = getStorageItem(STORAGE_KEYS.activeTab);
-        const storedLastFetchedNse = getStorageItem(STORAGE_KEYS.lastFetchedNse);
-        const storedLastFetchedMcx = getStorageItem(STORAGE_KEYS.lastFetchedMcx);
+        const item = {
+          value,
+          timestamp: Date.now(),
+          expires: Date.now() + (30 * 60 * 1000) // 30 minutes
+        };
+        // Use sessionStorage for better persistence across page navigation
+        sessionStorage.setItem(`globe_${key}`, JSON.stringify(item));
+      } catch (error) {
+        console.warn('Storage set error:', error);
+      }
+    },
+    get: (key: string) => {
+      try {
+        const item = sessionStorage.getItem(`globe_${key}`);
+        if (!item) return null;
+        
+        const parsed = JSON.parse(item);
+        if (Date.now() > parsed.expires) {
+          sessionStorage.removeItem(`globe_${key}`);
+          return null;
+        }
+        
+        return parsed.value;
+      } catch (error) {
+        console.warn('Storage get error:', error);
+        return null;
+      }
+    },
+    remove: (key: string) => {
+      try {
+        sessionStorage.removeItem(`globe_${key}`);
+      } catch (error) {
+        console.warn('Storage remove error:', error);
+      }
+    }
+  }), []);
 
-        if (storedNseData) {
-          setNseGlobeData(storedNseData);
+  // Generate content hash for comparison
+  const generateContentHash = useCallback((row: GlobeData): string => {
+    const keys = ['name', 'allocdate', 'clrtype', 'segments', 'tmcode', 'clicode', 'acctype', 'allocated'];
+    return btoa(keys.map(key => row[key] || '').join('|'));
+  }, []);
+
+  // Generate unique ID for each row
+  const generateRowId = useCallback((row: GlobeData): string => {
+    return `${row.name}-${row.allocdate}-${row.tmcode}-${row.clicode || 'null'}-${row.segments}`;
+  }, []);
+
+  // Process raw data and add metadata
+  const processRawData = useCallback((data: any[]): GlobeData[] => {
+    return data.map(row => {
+      const processedRow = {
+        ...row,
+        _id: generateRowId(row),
+        _contentHash: generateContentHash(row),
+        _isNew: false,
+        _isModified: false
+      };
+      return processedRow;
+    });
+  }, [generateRowId, generateContentHash]);
+
+  // Load cached data on mount
+  useEffect(() => {
+    const loadCachedData = async () => {
+      try {
+        const cachedNse = storage.get('nse_data');
+        const cachedMcx = storage.get('mcx_data');
+        const cachedLastUpdated = storage.get('last_updated');
+        const cachedSearchQuery = storage.get('search_query');
+        const cachedActiveTab = storage.get('active_tab');
+        const cachedLastFetchedNse = storage.get('last_fetched_nse');
+        const cachedLastFetchedMcx = storage.get('last_fetched_mcx');
+
+        if (cachedNse) {
+          setNseGlobeData(cachedNse);
+        }
+        
+        if (cachedMcx) {
+          setMcxGlobeData(cachedMcx);
         }
 
-        if (storedMcxData) {
-          setMcxGlobeData(storedMcxData);
+        if (cachedLastFetchedNse) {
+          lastFetchedDataRef.current.nse = new Map(cachedLastFetchedNse);
         }
 
-        if (storedLastFetchedNse) {
-          lastFetchedNseGlobeData.current = storedLastFetchedNse;
+        if (cachedLastFetchedMcx) {
+          lastFetchedDataRef.current.mcx = new Map(cachedLastFetchedMcx);
         }
 
-        if (storedLastFetchedMcx) {
-          lastFetchedMcxGlobeData.current = storedLastFetchedMcx;
+        if (cachedLastUpdated) {
+          setLastUpdated(new Date(cachedLastUpdated));
         }
 
-        if (storedLastUpdated) {
-          setLastUpdated(new Date(storedLastUpdated));
+        if (cachedSearchQuery) {
+          setSearchQuery(cachedSearchQuery);
         }
 
-        if (storedSearchQuery) {
-          setSearchQuery(storedSearchQuery);
+        if (cachedActiveTab) {
+          setActiveTab(cachedActiveTab);
         }
 
-        if (storedActiveTab) {
-          setActiveTab(storedActiveTab);
-        }
+        // Check if data is stale (older than 5 minutes)
+        const isDataStale = !cachedLastUpdated || 
+          (Date.now() - new Date(cachedLastUpdated).getTime()) > 5 * 60 * 1000;
 
-        // If we have stored data, set initial loading to false
-        if (storedNseData || storedMcxData) {
-          setIsLoading(false);
+        // Only fetch if no cached data or data is stale
+        if ((!cachedNse && !cachedMcx) || isDataStale) {
+          await fetchGlobeData();
         }
       } catch (error) {
-        console.error('Error loading stored data:', error);
+        console.error('Error loading cached data:', error);
+        await fetchGlobeData();
+      } finally {
+        setIsInitialLoading(false);
       }
     };
 
-    loadStoredData();
-    
-    // Only fetch fresh data if data is stale (older than 5 minutes)
-    const storedLastUpdated = getStorageItem(STORAGE_KEYS.lastUpdated);
-    const isDataStale = !storedLastUpdated || (Date.now() - new Date(storedLastUpdated).getTime()) > 5 * 60 * 1000;
-    
-    if (isDataStale || (!getStorageItem(STORAGE_KEYS.nse_data) && !getStorageItem(STORAGE_KEYS.mcx_data))) {
-      fetchGlobeData();
-    }
+    loadCachedData();
   }, []);
 
-  // Save data to local storage whenever it changes
+  // Cache data whenever it changes
   useEffect(() => {
     if (nseGlobeData.length > 0) {
-      setStorageItem(STORAGE_KEYS.nse_data, nseGlobeData);
+      storage.set('nse_data', nseGlobeData);
     }
-  }, [nseGlobeData]);
+  }, [nseGlobeData, storage]);
 
   useEffect(() => {
     if (mcxGlobeData.length > 0) {
-      setStorageItem(STORAGE_KEYS.mcx_data, mcxGlobeData);
+      storage.set('mcx_data', mcxGlobeData);
     }
-  }, [mcxGlobeData]);
+  }, [mcxGlobeData, storage]);
 
-  // Save other states to storage
+  // Cache other state
   useEffect(() => {
-    setStorageItem(STORAGE_KEYS.searchQuery, searchQuery);
-  }, [searchQuery]);
+    storage.set('search_query', searchQuery);
+  }, [searchQuery, storage]);
 
   useEffect(() => {
-    setStorageItem(STORAGE_KEYS.activeTab, activeTab);
-  }, [activeTab]);
+    storage.set('active_tab', activeTab);
+  }, [activeTab, storage]);
 
   useEffect(() => {
     if (lastUpdated) {
-      setStorageItem(STORAGE_KEYS.lastUpdated, lastUpdated.toISOString());
+      storage.set('last_updated', lastUpdated.toISOString());
     }
-  }, [lastUpdated]);
+  }, [lastUpdated, storage]);
 
-  // Save last fetched data to storage
-  useEffect(() => {
-    if (lastFetchedNseGlobeData.current.length > 0) {
-      setStorageItem(STORAGE_KEYS.lastFetchedNse, lastFetchedNseGlobeData.current);
+  // Fetch data from API
+  const fetchApiData = useCallback(async (source: 'NSE Globe' | 'MCX Globe') => {
+    const response = await fetch('https://n8n.gopocket.in/webhook/getglobe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-  }, [lastFetchedNseGlobeData.current]);
-
-  useEffect(() => {
-    if (lastFetchedMcxGlobeData.current.length > 0) {
-      setStorageItem(STORAGE_KEYS.lastFetchedMcx, lastFetchedMcxGlobeData.current);
+    
+    const data = await response.json();
+    
+    if (!Array.isArray(data)) {
+      console.error('Expected array but got:', data);
+      return [];
     }
-  }, [lastFetchedMcxGlobeData.current]);
+    
+    return processRawData(data);
+  }, [processRawData]);
 
-  // Fetch Globe data from API
-  const fetchApiData = async (source: 'NSE Globe' | 'MCX Globe') => {
-    try {
-      const response = await fetch('https://n8n.gopocket.in/webhook/rms1', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ source }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Check if data is an array, if not, return empty array
-      if (!Array.isArray(data)) {
-        console.error('Expected array but got:', data);
-        return [];
-      }
-      
-      // Add IDs to each row
-      return data.map((row: any) => ({
-        ...row,
-        _id: generateRowId(row)
-      }));
-    } catch (error) {
-      console.error(`Error fetching ${source} data:`, error);
-      throw error;
-    }
-  };
-
-  // Process data for incremental updates
-  const processIncrementalUpdate = (
+  // Optimized incremental update function
+  const performIncrementalUpdate = useCallback((
     newData: GlobeData[],
-    lastData: GlobeData[],
-    setData: React.Dispatch<React.SetStateAction<GlobeData[]>>,
-    setLastData: (data: GlobeData[]) => void
-  ) => {
-    if (lastData.length > 0) {
-      const currentDataMap = new Map(lastData.map(row => [row._id!, getRowContentHash(row)]));
-      const newDataMap = new Map(newData.map(row => [row._id!, getRowContentHash(row)]));
+    currentData: GlobeData[],
+    dataType: 'nse' | 'mcx'
+  ): { updatedData: GlobeData[], newCount: number, modifiedCount: number } => {
+    const currentDataMap = new Map(currentData.map(row => [row._id!, row]));
+    const newDataMap = new Map(newData.map(row => [row._id!, row._contentHash!]));
+    const lastFetchedMap = lastFetchedDataRef.current[dataType];
+    
+    let newCount = 0;
+    let modifiedCount = 0;
+    const updatedData: GlobeData[] = [...currentData];
+
+    // Process new data for incremental changes
+    newData.forEach(newRow => {
+      const rowId = newRow._id!;
+      const existingRowIndex = updatedData.findIndex(row => row._id === rowId);
+      const lastFetchedHash = lastFetchedMap.get(rowId);
       
-      let newCount = 0;
-      let modifiedCount = 0;
-      
-      // Start with clean data (no flags)
-      const cleanCurrentData = lastData.map(row => ({
-        ...row,
-        _isNew: false,
-        _isModified: false
-      }));
-      
-      // Create a map of current data by ID for easy lookup
-      const currentDataById = new Map(cleanCurrentData.map(row => [row._id!, row]));
-      
-      // Process new data
-      const updatedData: GlobeData[] = [];
-      
-      newData.forEach(newRow => {
-        const rowId = newRow._id!;
-        const newContentHash = newDataMap.get(rowId);
-        const oldContentHash = currentDataMap.get(rowId);
-        const existingRow = currentDataById.get(rowId);
-        
-        if (!existingRow) {
-          // New record
-          (newRow as any)._isNew = true;
-          updatedData.push(newRow);
-          newCount++;
-        } else if (oldContentHash !== newContentHash) {
-          // Modified record
-          (newRow as any)._isModified = true;
-          updatedData.push(newRow);
+      if (existingRowIndex === -1) {
+        // Completely new record
+        newRow._isNew = true;
+        updatedData.push(newRow);
+        newCount++;
+      } else {
+        // Check if content has changed since last fetch
+        if (lastFetchedHash && lastFetchedHash !== newRow._contentHash) {
+          newRow._isModified = true;
+          updatedData[existingRowIndex] = { ...newRow };
           modifiedCount++;
         } else {
-          // Unchanged record
-          updatedData.push(existingRow);
+          // No change - keep existing row without flags
+          updatedData[existingRowIndex] = { 
+            ...updatedData[existingRowIndex],
+            _isNew: false,
+            _isModified: false
+          };
         }
-      });
+      }
       
-      setData(updatedData);
-      setLastData(updatedData.map(row => ({
-        ...row,
-        _isNew: false,
-        _isModified: false
-      })));
-      
-      // Update counts
-      setNewRecordsCount(newCount);
-      setModifiedRecordsCount(modifiedCount);
-      
-      // Clear new/modified flags after 5 seconds
-      setTimeout(() => {
-        setData(prev => prev.map(row => ({
-          ...row,
-          _isNew: false,
-          _isModified: false
-        })));
-      }, 5000);
-    } else {
-      // Full refresh for initial load
-      setData(newData);
-      setLastData(newData);
-    }
-  };
+      // Update last fetched hash
+      lastFetchedMap.set(rowId, newRow._contentHash!);
+    });
 
-  const fetchGlobeData = async () => {
+    // Remove records that no longer exist in new data
+    const updatedDataFiltered = updatedData.filter(row => 
+      newDataMap.has(row._id!) || row._isNew || row._isModified
+    );
+
+    return { updatedData: updatedDataFiltered, newCount, modifiedCount };
+  }, []);
+
+  // Main fetch function with optimized updates
+  const fetchGlobeData = useCallback(async () => {
     try {
       setIsLoading(true);
       setConnectionStatus('syncing');
       setError(null);
       
-      // Fetch both NSE and MCX data
+      // Reset counters
+      setNewRecordsCount(0);
+      setModifiedRecordsCount(0);
+      
+      // Fetch both datasets
       const [nseData, mcxData] = await Promise.all([
         fetchApiData('NSE Globe'),
         fetchApiData('MCX Globe')
       ]);
       
-      // Process incremental updates for both datasets
-      processIncrementalUpdate(
-        nseData,
-        lastFetchedNseGlobeData.current,
-        setNseGlobeData,
-        (data) => lastFetchedNseGlobeData.current = data
-      );
+      // Perform incremental updates
+      const nseUpdate = performIncrementalUpdate(nseData, nseGlobeData, 'nse');
+      const mcxUpdate = performIncrementalUpdate(mcxData, mcxGlobeData, 'mcx');
       
-      processIncrementalUpdate(
-        mcxData,
-        lastFetchedMcxGlobeData.current,
-        setMcxGlobeData,
-        (data) => lastFetchedMcxGlobeData.current = data
-      );
+      // Update state only if there are changes
+      if (nseUpdate.newCount > 0 || nseUpdate.modifiedCount > 0 || nseGlobeData.length === 0) {
+        setNseGlobeData(nseUpdate.updatedData);
+      }
+      
+      if (mcxUpdate.newCount > 0 || mcxUpdate.modifiedCount > 0 || mcxGlobeData.length === 0) {
+        setMcxGlobeData(mcxUpdate.updatedData);
+      }
+      
+      // Update counters
+      setNewRecordsCount(nseUpdate.newCount + mcxUpdate.newCount);
+      setModifiedRecordsCount(nseUpdate.modifiedCount + mcxUpdate.modifiedCount);
+      
+      // Cache the last fetched hashes
+      storage.set('last_fetched_nse', Array.from(lastFetchedDataRef.current.nse.entries()));
+      storage.set('last_fetched_mcx', Array.from(lastFetchedDataRef.current.mcx.entries()));
       
       setConnectionStatus('connected');
       setLastUpdated(new Date());
+      
+      // Clear flags after 5 seconds
+      if (clearFlagsTimeoutRef.current) {
+        clearTimeout(clearFlagsTimeoutRef.current);
+      }
+      
+      clearFlagsTimeoutRef.current = setTimeout(() => {
+        setNseGlobeData(prev => prev.map(row => ({
+          ...row,
+          _isNew: false,
+          _isModified: false
+        })));
+        setMcxGlobeData(prev => prev.map(row => ({
+          ...row,
+          _isNew: false,
+          _isModified: false
+        })));
+      }, 5000);
+      
     } catch (error) {
       console.error('Error fetching globe data:', error);
-      setError(`Failed to fetch data: ${error.message}`);
+      setError(`Failed to fetch data: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setConnectionStatus('disconnected');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [nseGlobeData, mcxGlobeData, fetchApiData, performIncrementalUpdate, storage]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (clearFlagsTimeoutRef.current) {
+        clearTimeout(clearFlagsTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle column sorting
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    
-    setSortConfig({ key, direction });
-  };
+  const handleSort = useCallback((key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  }, []);
 
-  // Calculate summary data based on segments
+  // Memoized summary calculations
   const summaryData = useMemo((): SummaryData => {
-    const currentTabData = activeTab === 'nse' ? nseGlobeData : mcxGlobeData;
-    
-    // Calculate NSE funds (from nseGlobeData)
     const totalCMFund = nseGlobeData
-      .filter(row => row.segments && row.segments.toLowerCase().includes('cm'))
+      .filter(row => row.segments?.toLowerCase().includes('cm'))
       .reduce((sum, row) => sum + parseFloat(row.allocated || '0'), 0);
     
     const totalFOFund = nseGlobeData
-      .filter(row => row.segments && (row.segments.toLowerCase().includes('fo') || row.segments.toLowerCase().includes('f&o')))
+      .filter(row => {
+        const segments = row.segments?.toLowerCase() || '';
+        return segments.includes('fo') || segments.includes('f&o');
+      })
       .reduce((sum, row) => sum + parseFloat(row.allocated || '0'), 0);
     
     const totalCDFund = nseGlobeData
-      .filter(row => row.segments && row.segments.toLowerCase().includes('cd'))
+      .filter(row => row.segments?.toLowerCase().includes('cd'))
       .reduce((sum, row) => sum + parseFloat(row.allocated || '0'), 0);
     
-    // Calculate MCX funds (from mcxGlobeData)
     const totalMCXFund = mcxGlobeData
       .reduce((sum, row) => sum + parseFloat(row.allocated || '0'), 0);
     
-    // Current tab records count
+    const currentTabData = activeTab === 'nse' ? nseGlobeData : mcxGlobeData;
     const totalRecords = currentTabData.length;
 
     return {
@@ -420,29 +488,30 @@ const GlobeFund: React.FC = () => {
     };
   }, [nseGlobeData, mcxGlobeData, activeTab]);
 
-  // Filter and sort data based on search
+  // Memoized filtered and sorted data
   const filteredData = useMemo(() => {
     const data = activeTab === 'nse' ? nseGlobeData : mcxGlobeData;
     
-    const filtered = data.filter(item => {
-      return (
-        item.tmcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.clicode && item.clicode.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        item.segments.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.allocated.toLowerCase().includes(searchQuery.toLowerCase())
+    let filtered = data;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = data.filter(item => 
+        item.tmcode?.toLowerCase().includes(query) ||
+        item.clicode?.toLowerCase().includes(query) ||
+        item.segments?.toLowerCase().includes(query) ||
+        item.allocated?.toLowerCase().includes(query)
       );
-    });
+    }
 
     if (sortConfig.key) {
-      filtered.sort((a, b) => {
-        // Handle numeric sorting for allocated
+      filtered = [...filtered].sort((a, b) => {
         if (sortConfig.key === 'allocated') {
           const aNum = parseFloat(a.allocated || '0');
           const bNum = parseFloat(b.allocated || '0');
           return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
         }
         
-        // Default string sorting for other columns
         const aValue = a[sortConfig.key] || '';
         const bValue = b[sortConfig.key] || '';
         
@@ -459,20 +528,18 @@ const GlobeFund: React.FC = () => {
     return filtered;
   }, [nseGlobeData, mcxGlobeData, activeTab, searchQuery, sortConfig]);
 
-  const formatNumber = (num: number) => {
+  const formatNumber = useCallback((num: number) => {
     return new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(num);
-  };
+  }, []);
 
-  const exportToCSV = () => {
+  const exportToCSV = useCallback(() => {
     const headers = ['name', 'allocdate', 'clrtype', 'segments', 'tmcode', 'clicode', 'acctype', 'allocated'];
-    const data = filteredData;
-
     const csvContent = [
       headers.join(','),
-      ...data.map(row => 
+      ...filteredData.map(row => 
         headers.map(header => `"${row[header] || ''}"`).join(',')
       )
     ].join('\n');
@@ -486,7 +553,8 @@ const GlobeFund: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+    URL.revokeObjectURL(url);
+  }, [filteredData, activeTab]);
 
   const getConnectionStatusIcon = () => {
     switch (connectionStatus) {
@@ -501,7 +569,6 @@ const GlobeFund: React.FC = () => {
     }
   };
 
-  // Render sort indicator for table headers
   const renderSortIndicator = (key: string) => {
     if (sortConfig.key !== key) return null;
     
@@ -510,10 +577,21 @@ const GlobeFund: React.FC = () => {
       <ChevronDown className="h-4 w-4 inline ml-1" />;
   };
 
-  // Get current data based on active tab
   const getCurrentData = () => {
     return activeTab === 'nse' ? nseGlobeData : mcxGlobeData;
   };
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <RefreshCw className="mx-auto h-12 w-12 animate-spin text-blue-500 mb-4" />
+          <h2 className="text-xl font-semibold text-slate-700 mb-2">Loading Globe Data</h2>
+          <p className="text-slate-500">Please wait while we fetch your data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
@@ -547,7 +625,7 @@ const GlobeFund: React.FC = () => {
               variant="outline"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
+              {isLoading ? 'Syncing...' : 'Refresh'}
             </Button>
             <Button 
               onClick={exportToCSV}
@@ -726,7 +804,7 @@ const GlobeFund: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoading ? (
+                    {isLoading && getCurrentData().length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8">
                           <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
@@ -754,37 +832,21 @@ const GlobeFund: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredData.map((row, index) => (
-                        <TableRow 
-                          key={`${row._id}-${index}`} 
-                          className={`hover:bg-slate-50 transition-colors duration-200 ${
-                            row._isNew ? 'bg-green-50 border-l-4 border-green-400' :
-                            row._isModified ? 'bg-blue-50 border-l-4 border-blue-400' : ''
-                          }`}
-                        >
-                          <TableCell className="font-mono text-sm">{row.allocdate}</TableCell>
-                          <TableCell>{row.clrtype}</TableCell>
-                          <TableCell>{row.segments}</TableCell>
-                          <TableCell className="font-mono">{row.tmcode}</TableCell>
-                          <TableCell className="font-mono">{row.clicode || '-'}</TableCell>
-                          <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              row.acctype === 'C' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              {row.acctype === 'C' ? 'Client' : 'Proprietary'}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold">
-                            ₹{formatNumber(parseFloat(row.allocated || '0'))}
-                          </TableCell>
-                        </TableRow>
+                      filteredData.map((row) => (
+                        <MemoizedTableRow key={row._id} row={row} />
                       ))
                     )}
                   </TableBody>
                 </Table>
               </div>
+              
+              {/* Loading overlay for incremental updates */}
+              {isLoading && getCurrentData().length > 0 && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Syncing latest data...</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
