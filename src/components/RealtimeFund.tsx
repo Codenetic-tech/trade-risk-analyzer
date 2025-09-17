@@ -217,6 +217,7 @@ const fetchAPIData = async () => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      mode: 'cors'
     });
     
     if (!response.ok) {
