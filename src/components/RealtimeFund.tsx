@@ -211,13 +211,12 @@ const RealtimeFund: React.FC = () => {
   // Fetch data from API
 const fetchAPIData = async () => {
   try {
-    const response = await fetch('/api/method/rms.api.get_realtimefund_records', {
+    const response = await fetch('https://crm.gopocket.in/api/method/rms.api.get_realtimefund_records', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      mode: 'cors'
     });
     
     if (!response.ok) {

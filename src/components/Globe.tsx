@@ -285,13 +285,12 @@ const GlobeFund: React.FC = () => {
   // Fetch data from API
   const fetchApiData = useCallback(async () => {
     try {
-      const response = await fetch('api/method/rms.api.get_globe_records', {
+      const response = await fetch('https://crm.gopocket.in/api/method/rms.api.get_globe_records', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        mode: 'cors'
       });
       
       if (!response.ok) {
