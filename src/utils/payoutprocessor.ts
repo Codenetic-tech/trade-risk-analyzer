@@ -17,6 +17,7 @@ export interface PayoutData {
   NSESpan?: number;
   ManualStatus?: 'OK' | 'Not OK' | 'JV CODE OK' | 'JV CODE Not OK';
   TotalLedger?: number;
+  GlobeFund?: string;
 }
 
 export interface LedgerData {
@@ -494,6 +495,7 @@ export const exportProcessedData = (processedData: PayoutData[]) => {
     'NSE Span': row.NSESpan,
     'MRG Margin': row.Margin,
     'Difference': row.Difference,
+    'Globe Fund': row.GlobeFund,
     Status: row.Status
   }));
 
@@ -522,6 +524,8 @@ export const processDataWithLedger = (
     let nseTotal = 0;
     let mcxTotal = 0;
     let difference = 0;
+    let globedifference = 0;
+    let globeFund = '';
 
     // Check if UCC is in JV codes first
     if (jvCodes && jvCodes.has(payout.UCC)) {
@@ -539,22 +543,30 @@ export const processDataWithLedger = (
           case 'MCX':
             ledgerBalance = Math.abs(ledgerEntry.mcx);
             difference = mcxTotal - payout.Pay;
+            // For JV MCX, the entire payout amount goes to Globe
+            globeFund = `MCX: ${formatNumber(payout.Pay)}`;
             break;
           case 'CM':
             ledgerBalance = Math.abs(ledgerEntry.nseCm);
             difference = nseTotal - payout.Pay;
+            // For JV CM, the entire payout amount goes to Globe
+            globeFund = `CM: ${formatNumber(payout.Pay)}`;
             break;
           case 'FO':
             ledgerBalance = Math.abs(ledgerEntry.nseFo);
             difference = nseTotal - payout.Pay;
+            // For JV FO, the entire payout amount goes to Globe
+            globeFund = `FO: ${formatNumber(payout.Pay)}`;
             break;
           case 'CM+FO':
             ledgerBalance = ledgerEntry.nseCm + ledgerEntry.nseFo;
             difference = nseTotal - payout.Pay;
+            // For JV CM+FO, the entire payout amount goes to FO in Globe
+            globeFund = `CM: 0, FO: ${formatNumber(payout.Pay)}`;
             break;
         }
         
-        status = 'JV CODE OK';
+        status = ledgerBalance > 0 ? 'JV CODE OK' : 'JV CODE Not OK';
       } else {
         status = 'JV CODE Not OK';
       }
@@ -572,16 +584,42 @@ export const processDataWithLedger = (
       switch (payout.Segment) {
         case 'MCX':
           ledgerBalance = Math.abs(ledgerEntry.mcx);
+          difference = mcxTotal - payout.Pay;
+          // For MCX, the entire payout amount goes to Globe
+          globeFund = `MCX: ${formatNumber(payout.Pay)}`;
           break;
         case 'CM':
           ledgerBalance = Math.abs(ledgerEntry.nseCm);
+          difference = nseTotal - payout.Pay;
+          globedifference = ledgerEntry.nseCm - payout.Pay
+          // For CM, check if CM ledger amount is sufficient
+          if (ledgerEntry.nseCm >= payout.Pay) {
+            // CM amount is sufficient, send difference to CM
+            globeFund = `CM: ${formatNumber(Math.max(0, globedifference))}`;
+          } else {
+            // CM amount is insufficient, send 0 to CM and difference to FO
+            globeFund = `CM: 0, FO: ${formatNumber(Math.max(0, difference))}`;
+          }
           break;
         case 'FO':
           ledgerBalance = Math.abs(ledgerEntry.nseFo);
+          difference = nseTotal - payout.Pay;
+          globedifference = ledgerEntry.nseFo - payout.Pay
+          // For FO, check if FO ledger amount is sufficient
+          if (ledgerEntry.nseFo >= payout.Pay) {
+            // FO amount is sufficient, send difference to FO
+            globeFund = `FO: ${formatNumber(Math.max(0, globedifference))}`;
+          } else {
+            // FO amount is insufficient, send difference to CM
+            globeFund = `CM: ${formatNumber(Math.max(0, difference))}, FO: 0`;
+          }
           break;
         case 'CM+FO':
           // For combined segment, use total NSE balance
           ledgerBalance = ledgerEntry.nseCm + ledgerEntry.nseFo;
+          difference = nseTotal - payout.Pay;
+          // For CM+FO, send 0 to CM and difference to FO
+          globeFund = `CM: 0, FO: ${formatNumber(Math.max(0, difference))}`;
           break;
       }
       
@@ -591,7 +629,6 @@ export const processDataWithLedger = (
       if (payout.Segment === 'MCX') {
         // For MCX: available = ledgerBalance - Margin
         availableBalance = ledgerBalance - (payout.Margin || 0);
-        difference = mcxTotal - payout.Pay;
         
         // Set status based on available balance and margin
         if (payout.Margin === 0) {
@@ -603,7 +640,6 @@ export const processDataWithLedger = (
       } else {
         // For FO/CM: available = ledgerBalance - NSESpan
         availableBalance = nseTotal - (payout.NSESpan || 0);
-        difference = nseTotal - payout.Pay;
         
         // Set status based on available balance and NSE span
         if (payout.NSESpan === 0) {
@@ -624,7 +660,8 @@ export const processDataWithLedger = (
       TotalLedger: nseTotal + mcxTotal,
       Difference: difference,
       Margin: payout.Margin,
-      NSESpan: payout.NSESpan
+      NSESpan: payout.NSESpan,
+      GlobeFund: globeFund
     };
   });
 };
@@ -791,7 +828,7 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
           // For CM segment, check if CM ledger amount >= payout
           if (ledgerEntry.nseCm >= row.Pay) {
             // CM amount is sufficient, set difference in CM segment (clamped to 0)
-            const cmAmount = Math.max(0, Number(row.Difference));
+            const cmAmount = Math.max(0, Number(ledgerEntry.nseCm - row.Pay));
             lines.push(
               `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
@@ -807,17 +844,17 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
           }
         } else if (row.Segment === 'FO') {
           // For FO segment, check if CM ledger amount >= payout
-          if (ledgerEntry.nseCm >= row.Pay) {
-            // CM amount is sufficient, set difference in CM segment (clamped to 0)
-            const cmAmount = Math.max(0, Number(row.Difference));
+          if (ledgerEntry.nseFo >= row.Pay) {
+            // FO amount is sufficient, set difference in FO segment (clamped to 0)
+            const foAmount = Math.max(0, Number(ledgerEntry.nseFo - row.Pay));
             lines.push(
-              `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+              `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
             );
           } else {
-            // CM amount is insufficient, set difference in FO segment (clamped to 0)
-            const foAmount = Math.max(0, Number(row.Difference));
+            // Fo amount is insufficient, set difference in CM segment (clamped to 0)
+            const cmAmount = Math.max(0, Number(row.Difference));
             lines.push(
-              `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
+              `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
           }
         }

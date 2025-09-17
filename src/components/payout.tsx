@@ -905,6 +905,19 @@ const Payout: React.FC = () => {
                   </TableHead>
                   <TableHead className="text-right">
                     <button 
+                      onClick={() => handleSort('GlobeFund')}
+                      className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
+                    >
+                      Globe
+                      {sortConfig.key === 'GlobeFund' && (
+                        <span className="ml-1">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button 
                       onClick={() => handleSort('Difference')}
                       className="flex justify-end w-full items-center font-medium hover:text-blue-600 transition-colors"
                     >
@@ -1020,6 +1033,7 @@ const Payout: React.FC = () => {
                       <TableCell className="text-right font-mono">{row.TotalLedger ? formatNumber(row.TotalLedger) : '0'}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.Margin || 0)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.NSESpan || 0)}</TableCell>
+                      <TableCell className="text-right font-mono">{(row.GlobeFund)}</TableCell>
                       <TableCell className={`text-right font-mono ${
                         row.Difference !== undefined && row.Difference < 0 
                           ? 'text-red-600' 
