@@ -739,6 +739,15 @@ export const calculateSummary = (processedData: PayoutData[], duplicates: string
   };
 };
 
+    // Get current date in DD-MMM-YYYY format
+  const getCurrentDate = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
 export const exportRMSLimitsFile = (processedData: PayoutData[]) => {
   // Filter only OK status records (including JV CODE OK)
   const okData = processedData.filter(row => 
@@ -772,16 +781,9 @@ export const exportmcxglobefile = (processedData: PayoutData[]): string => {
 
   if (mcxOkData.length === 0) return "";
 
-  // Get date for file content (DD-MMM-YYYY)
-  const currentDate = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).replace(/ /g, '-');
-
   // Format each record
   const mcxContent = mcxOkData.map(row => 
-    `${currentDate},CO,8090,46365,,${row.UCC},C,${(row.Pay)},,,,,,,D`
+    `${getCurrentDate()},CO,8090,46365,,${row.UCC},C,${(row.Pay)},,,,,,,D`
   ).join('\n');
 
   // Create header
@@ -798,12 +800,6 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
   );
 
   if (nseOkData.length === 0) return '';
-
-  const currentDate = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).replace(/ /g, '-');
 
   // Helper function to format numbers with exactly two decimals, removing trailing zeros
   const formatAmount = (num: number): string => {
@@ -830,16 +826,16 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
             // CM amount is sufficient, set difference in CM segment (clamped to 0)
             const cmAmount = Math.max(0, Number(ledgerEntry.nseCm - row.Pay));
             lines.push(
-              `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+              `${getCurrentDate()},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
           } else {
             // CM amount is insufficient, set 0 in CM and difference in FO (clamped to 0)
             lines.push(
-              `${currentDate},CM,M50302,90221,,${row.UCC},C,0,,,,,,,D`
+              `${getCurrentDate()},CM,M50302,90221,,${row.UCC},C,0,,,,,,,D`
             );
             const foAmount = Math.max(0, Number(row.Difference));
             lines.push(
-              `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
+              `${getCurrentDate()},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
             );
           }
         } else if (row.Segment === 'FO') {
@@ -848,13 +844,13 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
             // FO amount is sufficient, set difference in FO segment (clamped to 0)
             const foAmount = Math.max(0, Number(ledgerEntry.nseFo - row.Pay));
             lines.push(
-              `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
+              `${getCurrentDate()},CM,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
             );
           } else {
             // Fo amount is insufficient, set difference in CM segment (clamped to 0)
             const cmAmount = Math.max(0, Number(row.Difference));
             lines.push(
-              `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+              `$getCurrentDate()},FO,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
           }
         }
@@ -865,10 +861,10 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
       const foAmount = Math.max(0, Number(row.Difference));
       
       lines.push(
-        `${currentDate},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+        `${getCurrentDate()},CM,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
       );
       lines.push(
-        `${currentDate},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
+        `${getCurrentDate()},FO,M50302,90221,,${row.UCC},C,${formatAmount(foAmount)},,,,,,,D`
       );
     }
   }
