@@ -6,6 +6,12 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
+    proxy: {
+      '/api': {
+        target: 'https://crm.gopocket.in',
+        changeOrigin: true,
+      }
+    },
     host: "::",
     port: 8080,
   },

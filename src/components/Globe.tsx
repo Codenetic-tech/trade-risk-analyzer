@@ -141,46 +141,35 @@ const GlobeFund: React.FC = () => {
   // Clear flags timeout refs
   const clearFlagsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Storage utilities with error handling
-  const storage = useMemo(() => ({
-    set: (key: string, value: any) => {
-      try {
-        const item = {
-          value,
-          timestamp: Date.now(),
-          expires: Date.now() + (30 * 60 * 1000) // 30 minutes
-        };
-        // Use sessionStorage for better persistence across page navigation
-        sessionStorage.setItem(`globe_${key}`, JSON.stringify(item));
-      } catch (error) {
-        console.warn('Storage set error:', error);
-      }
-    },
-    get: (key: string) => {
-      try {
-        const item = sessionStorage.getItem(`globe_${key}`);
-        if (!item) return null;
-        
-        const parsed = JSON.parse(item);
-        if (Date.now() > parsed.expires) {
-          sessionStorage.removeItem(`globe_${key}`);
-          return null;
-        }
-        
-        return parsed.value;
-      } catch (error) {
-        console.warn('Storage get error:', error);
-        return null;
-      }
-    },
-    remove: (key: string) => {
-      try {
-        sessionStorage.removeItem(`globe_${key}`);
-      } catch (error) {
-        console.warn('Storage remove error:', error);
-      }
+  // Storage keys
+  const STORAGE_KEYS = {
+    nseData: 'globe_nse_data',
+    mcxData: 'globe_mcx_data',
+    lastUpdated: 'globe_lastUpdated',
+    searchQuery: 'globe_searchQuery',
+    activeTab: 'globe_activeTab',
+    lastFetchedNse: 'globe_lastFetchedNse',
+    lastFetchedMcx: 'globe_lastFetchedMcx'
+  };
+
+  // Storage functions using sessionStorage
+  const setStorageItem = (key: string, value: any) => {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving to sessionStorage:', error);
     }
-  }), []);
+  };
+
+  const getStorageItem = (key: string) => {
+    try {
+      const item = sessionStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch (error) {
+      console.error('Error reading from sessionStorage:', error);
+      return null;
+    }
+  };
 
   // Generate content hash for comparison
   const generateContentHash = useCallback((row: GlobeData): string => {
@@ -211,13 +200,13 @@ const GlobeFund: React.FC = () => {
   useEffect(() => {
     const loadCachedData = async () => {
       try {
-        const cachedNse = storage.get('nse_data');
-        const cachedMcx = storage.get('mcx_data');
-        const cachedLastUpdated = storage.get('last_updated');
-        const cachedSearchQuery = storage.get('search_query');
-        const cachedActiveTab = storage.get('active_tab');
-        const cachedLastFetchedNse = storage.get('last_fetched_nse');
-        const cachedLastFetchedMcx = storage.get('last_fetched_mcx');
+        const cachedNse = getStorageItem(STORAGE_KEYS.nseData);
+        const cachedMcx = getStorageItem(STORAGE_KEYS.mcxData);
+        const cachedLastUpdated = getStorageItem(STORAGE_KEYS.lastUpdated);
+        const cachedSearchQuery = getStorageItem(STORAGE_KEYS.searchQuery);
+        const cachedActiveTab = getStorageItem(STORAGE_KEYS.activeTab);
+        const cachedLastFetchedNse = getStorageItem(STORAGE_KEYS.lastFetchedNse);
+        const cachedLastFetchedMcx = getStorageItem(STORAGE_KEYS.lastFetchedMcx);
 
         if (cachedNse) {
           setNseGlobeData(cachedNse);
@@ -254,12 +243,12 @@ const GlobeFund: React.FC = () => {
         // Only fetch if no cached data or data is stale
         if ((!cachedNse && !cachedMcx) || isDataStale) {
           await fetchGlobeData();
+        } else {
+          setIsInitialLoading(false);
         }
       } catch (error) {
         console.error('Error loading cached data:', error);
         await fetchGlobeData();
-      } finally {
-        setIsInitialLoading(false);
       }
     };
 
@@ -269,53 +258,61 @@ const GlobeFund: React.FC = () => {
   // Cache data whenever it changes
   useEffect(() => {
     if (nseGlobeData.length > 0) {
-      storage.set('nse_data', nseGlobeData);
+      setStorageItem(STORAGE_KEYS.nseData, nseGlobeData);
     }
-  }, [nseGlobeData, storage]);
+  }, [nseGlobeData]);
 
   useEffect(() => {
     if (mcxGlobeData.length > 0) {
-      storage.set('mcx_data', mcxGlobeData);
+      setStorageItem(STORAGE_KEYS.mcxData, mcxGlobeData);
     }
-  }, [mcxGlobeData, storage]);
-
-  // Cache other state
-  useEffect(() => {
-    storage.set('search_query', searchQuery);
-  }, [searchQuery, storage]);
+  }, [mcxGlobeData]);
 
   useEffect(() => {
-    storage.set('active_tab', activeTab);
-  }, [activeTab, storage]);
+    setStorageItem(STORAGE_KEYS.searchQuery, searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setStorageItem(STORAGE_KEYS.activeTab, activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     if (lastUpdated) {
-      storage.set('last_updated', lastUpdated.toISOString());
+      setStorageItem(STORAGE_KEYS.lastUpdated, lastUpdated.toISOString());
     }
-  }, [lastUpdated, storage]);
+  }, [lastUpdated]);
 
   // Fetch data from API
-  const fetchApiData = useCallback(async (source: 'NSE Globe' | 'MCX Globe') => {
-    const response = await fetch('https://n8n.gopocket.in/webhook/getglobe', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ source }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  const fetchApiData = useCallback(async () => {
+    try {
+      const response = await fetch('api/method/rms.api.get_globe_records', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        mode: 'cors'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.message || !data.message.success) {
+        throw new Error('API response not successful');
+      }
+      
+      // Process the raw data for both NSE and MCX
+      const nseData = processRawData(data.message.nse_records || []);
+      const mcxData = processRawData(data.message.mcx_records || []);
+
+      return { nseData, mcxData };
+    } catch (error: any) {
+      console.error('Error fetching API data:', error);
+      throw new Error(`Failed to fetch data: ${error.message || 'Unknown error'}`);
     }
-    
-    const data = await response.json();
-    
-    if (!Array.isArray(data)) {
-      console.error('Expected array but got:', data);
-      return [];
-    }
-    
-    return processRawData(data);
   }, [processRawData]);
 
   // Optimized incremental update function
@@ -382,11 +379,8 @@ const GlobeFund: React.FC = () => {
       setNewRecordsCount(0);
       setModifiedRecordsCount(0);
       
-      // Fetch both datasets
-      const [nseData, mcxData] = await Promise.all([
-        fetchApiData('NSE Globe'),
-        fetchApiData('MCX Globe')
-      ]);
+      // Fetch data
+      const { nseData, mcxData } = await fetchApiData();
       
       // Perform incremental updates
       const nseUpdate = performIncrementalUpdate(nseData, nseGlobeData, 'nse');
@@ -406,11 +400,12 @@ const GlobeFund: React.FC = () => {
       setModifiedRecordsCount(nseUpdate.modifiedCount + mcxUpdate.modifiedCount);
       
       // Cache the last fetched hashes
-      storage.set('last_fetched_nse', Array.from(lastFetchedDataRef.current.nse.entries()));
-      storage.set('last_fetched_mcx', Array.from(lastFetchedDataRef.current.mcx.entries()));
+      setStorageItem(STORAGE_KEYS.lastFetchedNse, Array.from(lastFetchedDataRef.current.nse.entries()));
+      setStorageItem(STORAGE_KEYS.lastFetchedMcx, Array.from(lastFetchedDataRef.current.mcx.entries()));
       
       setConnectionStatus('connected');
       setLastUpdated(new Date());
+      setIsInitialLoading(false);
       
       // Clear flags after 5 seconds
       if (clearFlagsTimeoutRef.current) {
@@ -430,14 +425,15 @@ const GlobeFund: React.FC = () => {
         })));
       }, 5000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching globe data:', error);
-      setError(`Failed to fetch data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(`Failed to fetch data: ${error.message}`);
       setConnectionStatus('disconnected');
+      setIsInitialLoading(false);
     } finally {
       setIsLoading(false);
     }
-  }, [nseGlobeData, mcxGlobeData, fetchApiData, performIncrementalUpdate, storage]);
+  }, [nseGlobeData, mcxGlobeData, fetchApiData, performIncrementalUpdate]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -458,6 +454,17 @@ const GlobeFund: React.FC = () => {
 
   // Memoized summary calculations
   const summaryData = useMemo((): SummaryData => {
+    // Return zero values during initial loading
+    if (isInitialLoading) {
+      return {
+        totalCMFund: 0,
+        totalFOFund: 0,
+        totalCDFund: 0,
+        totalMCXFund: 0,
+        totalRecords: 0
+      };
+    }
+
     const totalCMFund = nseGlobeData
       .filter(row => row.segments?.toLowerCase().includes('cm'))
       .reduce((sum, row) => sum + parseFloat(row.allocated || '0'), 0);
@@ -486,7 +493,7 @@ const GlobeFund: React.FC = () => {
       totalMCXFund,
       totalRecords
     };
-  }, [nseGlobeData, mcxGlobeData, activeTab]);
+  }, [nseGlobeData, mcxGlobeData, activeTab, isInitialLoading]);
 
   // Memoized filtered and sorted data
   const filteredData = useMemo(() => {
@@ -580,18 +587,6 @@ const GlobeFund: React.FC = () => {
   const getCurrentData = () => {
     return activeTab === 'nse' ? nseGlobeData : mcxGlobeData;
   };
-
-  if (isInitialLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <RefreshCw className="mx-auto h-12 w-12 animate-spin text-blue-500 mb-4" />
-          <h2 className="text-xl font-semibold text-slate-700 mb-2">Loading Globe Data</h2>
-          <p className="text-slate-500">Please wait while we fetch your data...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
@@ -804,7 +799,7 @@ const GlobeFund: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoading && getCurrentData().length === 0 ? (
+                    {isInitialLoading ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8">
                           <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
