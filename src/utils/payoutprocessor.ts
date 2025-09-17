@@ -544,19 +544,21 @@ export const processDataWithLedger = (
             ledgerBalance = Math.abs(ledgerEntry.mcx);
             difference = mcxTotal - payout.Pay;
             // For JV MCX, the entire payout amount goes to Globe
-            globeFund = `MCX: ${formatNumber(payout.Pay)}`;
+            globeFund = `MCX: ${formatNumber(difference)}`;
             break;
           case 'CM':
             ledgerBalance = Math.abs(ledgerEntry.nseCm);
             difference = nseTotal - payout.Pay;
+            globedifference = ledgerEntry.nseCm - payout.Pay;
             // For JV CM, the entire payout amount goes to Globe
-            globeFund = `CM: ${formatNumber(payout.Pay)}`;
+            globeFund = `CM: ${formatNumber(globedifference)}`;
             break;
           case 'FO':
             ledgerBalance = Math.abs(ledgerEntry.nseFo);
             difference = nseTotal - payout.Pay;
+            globedifference = ledgerEntry.nseFo - payout.Pay;
             // For JV FO, the entire payout amount goes to Globe
-            globeFund = `FO: ${formatNumber(payout.Pay)}`;
+            globeFund = `FO: ${formatNumber(globedifference)}`;
             break;
           case 'CM+FO':
             ledgerBalance = ledgerEntry.nseCm + ledgerEntry.nseFo;
