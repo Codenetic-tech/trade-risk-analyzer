@@ -18,6 +18,7 @@ const Dashboard: React.FC = () => {
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [netStatusFilter, setNetStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -56,9 +57,10 @@ const Dashboard: React.FC = () => {
       const matchesSearch = item.ucc.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            (item.clientName?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
       const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesNetStatus = netStatusFilter === 'all' || item.netstatus === netStatusFilter; // Add this line
+      return matchesSearch && matchesStatus && matchesNetStatus; // Update this line
     });
-  }, [processedData, searchQuery, statusFilter]);
+  }, [processedData, searchQuery, statusFilter, netStatusFilter]);
 
   const paginatedData = useMemo(() => {
     if (!processedData) return [];
@@ -99,7 +101,11 @@ const Dashboard: React.FC = () => {
         excessCount: 0,
         shortCount: 0,
         totalLedger: 0,
-        totalAllocation: 0
+        totalAllocation: 0,
+        totalNetExcess: 0,
+        totalNetShort: 0,
+        netexcessCount: 0,
+        netshortCount: 0
       };
     }
     
@@ -168,27 +174,27 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Summary Cards - Always visible like EveningIntersegment */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-        <Card className="shadow-sm border-blue-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-600">Total Records</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-700">
-              {summaryTotals.totalRecords}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm border-green-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600">NIL Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">
-              {summaryTotals.nilCount}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+        <Card className="shadow-sm border-red-100">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-red-600">Total Net Excess</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-red-700">
+            {formatNumber(summaryTotals.totalNetExcess || 0)}
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="shadow-sm border-yellow-100">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-yellow-600">Total Net Short</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-yellow-700">
+            {formatNumber(summaryTotals.totalNetShort || 0)}
+          </div>
+        </CardContent>
+      </Card>
         <Card className="shadow-sm border-red-100">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-red-600">EXCESS</CardTitle>
@@ -206,6 +212,26 @@ const Dashboard: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold text-yellow-700">
               {summaryTotals.shortCount}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-red-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-red-600">NET EXCESS</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-700">
+              {summaryTotals.netexcessCount}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-yellow-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-yellow-600">NET SHORT</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-700">
+              {summaryTotals.netshortCount}
             </div>
           </CardContent>
         </Card>
@@ -229,6 +255,19 @@ const Dashboard: React.FC = () => {
                   disabled={!processedData}
                 />
               </div>
+              {/* Add the Net Status Filter */}
+              <Select value={netStatusFilter} onValueChange={setNetStatusFilter} disabled={!processedData}>
+                <SelectTrigger className="w-full sm:w-32">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Net Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Net Status</SelectItem>
+                  <SelectItem value="NIL">NIL</SelectItem>
+                  <SelectItem value="EXCESS">EXCESS</SelectItem>
+                  <SelectItem value="SHORT">SHORT</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter} disabled={!processedData}>
                 <SelectTrigger className="w-full sm:w-32">
                   <Filter className="h-4 w-4 mr-2" />
@@ -258,32 +297,34 @@ const Dashboard: React.FC = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>UCC</TableHead>
-                  <TableHead>Client Name</TableHead>
                   <TableHead className="text-right">MCX Balance</TableHead>
                   <TableHead className="text-right">NSE-CM Balance</TableHead>
                   <TableHead className="text-right">NSE-F&O Balance</TableHead>
                   <TableHead className="text-right">NSE-CDS Balance</TableHead>
                   <TableHead className="text-right">LED TOTAL</TableHead>
+                  <TableHead className="text-right">NET TOTAL</TableHead>
                   <TableHead className="text-right">FO</TableHead>
                   <TableHead className="text-right">CM</TableHead>
                   <TableHead className="text-right">CD</TableHead>
                   <TableHead className="text-right">CO</TableHead>
                   <TableHead className="text-right">ALLOC TOTAL</TableHead>
                   <TableHead>STATUS</TableHead>
+                  <TableHead>NET STATUS</TableHead>
                   <TableHead className="text-right">DIFF</TableHead>
+                  <TableHead className="text-right">NET DIFF</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8">
+                    <TableCell colSpan={16} className="text-center py-8">
                       <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-500" />
                       <p className="mt-2 text-slate-600">Processing files...</p>
                     </TableCell>
                   </TableRow>
                 ) : !processedData ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8">
+                    <TableCell colSpan={16} className="text-center py-8">
                       <FileText className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No Data Processed Yet
@@ -302,7 +343,7 @@ const Dashboard: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8">
+                    <TableCell colSpan={16} className="text-center py-8">
                       <Search className="mx-auto h-12 w-12 text-slate-400" />
                       <h3 className="mt-2 text-lg font-medium text-slate-800">
                         No matching records found
@@ -316,7 +357,6 @@ const Dashboard: React.FC = () => {
                   paginatedData.map((row) => (
                     <TableRow key={row.ucc} className="hover:bg-slate-50">
                       <TableCell className="font-medium">{row.ucc}</TableCell>
-                      <TableCell>{row.clientName}</TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {formatNumber(row.mcxBalance)}
                       </TableCell>
@@ -331,6 +371,9 @@ const Dashboard: React.FC = () => {
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-semibold text-blue-600">
                         {formatNumber(row.ledTotal)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm font-semibold text-indigo-600">
+                      {formatNumber(row.netTotal)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {formatNumber(row.fo)}
@@ -348,11 +391,17 @@ const Dashboard: React.FC = () => {
                         {formatNumber(row.allocTotal)}
                       </TableCell>
                       <TableCell>{getStatusBadge(row.status)}</TableCell>
+                      <TableCell>{getStatusBadge(row.netstatus)}</TableCell>
                       <TableCell className={`text-right font-mono text-sm font-semibold ${
                         row.diff > 0 ? 'text-red-600' : row.diff < 0 ? 'text-yellow-600' : 'text-green-600'
                       }`}>
                         {formatNumber(row.diff)}
                       </TableCell>
+                      <TableCell className={`text-right font-mono text-sm font-semibold ${
+                      row.netDiff > 0 ? 'text-red-600' : row.netDiff < 0 ? 'text-yellow-600' : 'text-green-600'
+                      }`}>
+                        {formatNumber(row.netDiff)}
+                    </TableCell>
                     </TableRow>
                   ))
                 )}

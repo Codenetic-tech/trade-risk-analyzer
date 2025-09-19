@@ -7,13 +7,16 @@ export interface RiskData {
   nseFoBalance: number;
   nseCdsBalance: number;
   ledTotal: number;
+  netTotal: number;
   fo: number;
   cm: number;
   cd: number;
   co: number;
   allocTotal: number;
   diff: number;
+  netDiff: number;
   status: 'NIL' | 'EXCESS' | 'SHORT';
+  netstatus: 'NIL' | 'EXCESS' | 'SHORT';
   clientName?: string;
 }
 
@@ -26,6 +29,10 @@ export interface ProcessedData {
     shortCount: number;
     totalLedger: number;
     totalAllocation: number;
+    totalNetExcess: number;
+    totalNetShort: number;
+    netexcessCount: number;
+    netshortCount: number;
   };
 }
 
@@ -260,6 +267,25 @@ export const processFiles = async (files: {
         status = 'SHORT';
       }
 
+      // Calculate NET TOTAL (sum of all balances)
+      const fnetTotal = riskRow.MCX_Balance + riskRow.NSE_CM_Balance + 
+                      riskRow.NSE_FO_Balance + riskRow.NSE_CDS_Balance;
+
+      const netTotal = Math.max(0, -fnetTotal);
+      
+      // Calculate NET DIFF (NET TOTAL minus ALLOC TOTAL)
+      const netDiff = parseFloat((allocTotal - netTotal).toFixed(2));
+
+      // Determine STATUS
+      let netstatus: 'NIL' | 'EXCESS' | 'SHORT';
+      if (Math.abs(netDiff) == 0.00) {
+        netstatus = 'NIL';
+      } else if (netDiff > 0) {
+        netstatus = 'EXCESS';
+      } else {
+        netstatus = 'SHORT';
+      }
+
       return {
         ucc,
         mcxBalance: riskRow.MCX_Balance,
@@ -275,6 +301,9 @@ export const processFiles = async (files: {
         diff,
         status,
         clientName: riskRow.Name,
+        netTotal,
+        netDiff,
+        netstatus,
       };
     });
 
@@ -286,8 +315,16 @@ export const processFiles = async (files: {
       nilCount: processedData.filter(item => item.status === 'NIL').length,
       excessCount: processedData.filter(item => item.status === 'EXCESS').length,
       shortCount: processedData.filter(item => item.status === 'SHORT').length,
+      netexcessCount: processedData.filter(item => item.netstatus === 'EXCESS').length,
+      netshortCount: processedData.filter(item => item.netstatus === 'SHORT').length,
       totalLedger: processedData.reduce((sum, item) => sum + item.ledTotal, 0),
       totalAllocation: processedData.reduce((sum, item) => sum + item.allocTotal, 0),
+      totalNetExcess: processedData
+        .filter(item => item.netstatus === 'EXCESS')
+        .reduce((sum, item) => sum + item.netDiff, 0),
+      totalNetShort: processedData
+        .filter(item => item.netstatus === 'SHORT')
+        .reduce((sum, item) => sum + Math.abs(item.netDiff), 0)
     };
 
     return { data: processedData, summary };
@@ -299,47 +336,31 @@ export const processFiles = async (files: {
 };
 
 export const exportToExcel = (data: RiskData[]): void => {
-  // Create CSV content with proper column names matching the Flask output
-  const headers = [
-    'UCC',
-    'MCX Balance',
-    'NSE-CM Balance',
-    'NSE-F&O Balance',
-    'NSE-CDS Balance',
-    'LED TOTAL',
-    'FO',
-    'CM',
-    'CD',
-    'CO',
-    'ALLOC TOTAL',
-    'STATUS',
-    'DIFF'
-  ];
+  // Create worksheet
+  const ws = XLSX.utils.json_to_sheet(data.map(row => ({
+    'UCC': row.ucc,
+    'Client Name': row.clientName,
+    'MCX Balance': row.mcxBalance,
+    'NSE-CM Balance': row.nseCmBalance,
+    'NSE-F&O Balance': row.nseFoBalance,
+    'NSE-CDS Balance': row.nseCdsBalance,
+    'LED TOTAL': row.ledTotal,
+    'NET TOTAL': row.netTotal,
+    'FO': row.fo,
+    'CM': row.cm,
+    'CD': row.cd,
+    'CO': row.co,
+    'ALLOC TOTAL': row.allocTotal,
+    'STATUS': row.status,
+    'NETSTATUS': row.netstatus,
+    'DIFF': row.diff,
+    'NET DIFF': row.netDiff,
+  })));
 
-  const csvContent = [
-    headers.join(','),
-    ...data.map(row => [
-      row.ucc,
-      row.mcxBalance,
-      row.nseCmBalance,
-      row.nseFoBalance,
-      row.nseCdsBalance,
-      row.ledTotal,
-      row.fo,
-      row.cm,
-      row.cd,
-      row.co,
-      row.allocTotal,
-      row.status,
-      row.diff
-    ].join(','))
-  ].join('\n');
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Risk Analysis');
 
-  const blob = new Blob([csvContent], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'output.xlsx';
-  link.click();
-  window.URL.revokeObjectURL(url);
+  // Generate Excel file and trigger download
+  XLSX.writeFile(wb, 'risk_analysis.xlsx');
 };
