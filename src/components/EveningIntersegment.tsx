@@ -418,7 +418,7 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `MCCLCOLL_46365_${dateString}.010`;
+    link.download = `MCCLCOLL_46365_${dateString}.030`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -447,7 +447,7 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `NSEkambala_${dateString}.txt`;
+    link.download = `EODNSEkambala_${dateString}.txt`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
@@ -477,7 +477,7 @@ const EveningIntersegment: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `MCXkambala_${dateString}.txt`;
+    link.download = `EODMCXkambala_${dateString}.txt`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
