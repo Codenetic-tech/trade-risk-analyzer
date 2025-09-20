@@ -852,7 +852,7 @@ export const exportNSEGlobeFile = (processedData: PayoutData[], ledgerData: Ledg
             // Fo amount is insufficient, set difference in CM segment (clamped to 0)
             const cmAmount = Math.max(0, Number(row.Difference));
             lines.push(
-              `$getCurrentDate()},FO,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
+              `${getCurrentDate()},FO,M50302,90221,,${row.UCC},C,${formatAmount(cmAmount)},,,,,,,D`
             );
           }
         }
