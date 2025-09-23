@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RefreshCw, Download, Wifi, WifiOff, ChevronUp, ChevronDown } from 'lucide-react';
+import { RefreshCw, Download, Wifi, WifiOff, ChevronUp, ChevronDown, Save, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { toast } from '@/hooks/use-toast';
 
 interface GlobeData {
   name: string;
@@ -65,14 +66,50 @@ const TableCell = ({ children, className = '', ...props }: React.TdHTMLAttribute
   </td>
 );
 
-// Optimized memoized table row with better comparison
-const MemoizedTableRow = React.memo(({ row }: { row: GlobeData }) => {
+// Updated memoized table row with editing functionality
+const MemoizedTableRow = React.memo(({ 
+  row, 
+  isEditing, 
+  onStartEdit, 
+  onSaveEdit, 
+  onCancelEdit 
+}: { 
+  row: GlobeData;
+  isEditing: boolean;
+  onStartEdit: (rowId: string, currentValue: number) => void;
+  onSaveEdit: (rowId: string, newValue: number, rowData: GlobeData) => void;
+  onCancelEdit: () => void;
+}) => {
+  const [tempAllocatedValue, setTempAllocatedValue] = useState<number>(0);
   const formatNumber = useCallback((num: number) => {
     return new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(num);
   }, []);
+
+  // Initialize temp value when editing starts
+  useEffect(() => {
+    if (isEditing) {
+      setTempAllocatedValue(parseFloat(row.allocated || '0'));
+    }
+  }, [isEditing, row.allocated]);
+
+  const handleDoubleClick = () => {
+    onStartEdit(row._id!, parseFloat(row.allocated || '0'));
+  };
+
+  const handleSave = () => {
+    onSaveEdit(row._id!, tempAllocatedValue, row);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      onCancelEdit();
+    }
+  };
 
   return (
     <TableRow 
@@ -96,7 +133,41 @@ const MemoizedTableRow = React.memo(({ row }: { row: GlobeData }) => {
         </span>
       </TableCell>
       <TableCell className="text-right font-mono font-semibold">
-        ₹{formatNumber(parseFloat(row.allocated || '0'))}
+        {isEditing ? (
+          <div className="flex items-center justify-end space-x-2">
+            <Input
+              type="number"
+              value={tempAllocatedValue}
+              onChange={(e) => setTempAllocatedValue(parseFloat(e.target.value) || 0)}
+              onKeyDown={handleKeyDown}
+              className="text-right w-32"
+              step="0.01"
+              autoFocus
+            />
+            <Button
+              size="sm"
+              onClick={handleSave}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Save className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onCancelEdit}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        ) : (
+          <div 
+            onDoubleClick={handleDoubleClick}
+            className="cursor-pointer hover:bg-slate-100 px-2 py-1 rounded transition-colors"
+            title="Double-click to edit"
+          >
+            ₹{formatNumber(parseFloat(row.allocated || '0'))}
+          </div>
+        )}
       </TableCell>
     </TableRow>
   );
@@ -104,7 +175,8 @@ const MemoizedTableRow = React.memo(({ row }: { row: GlobeData }) => {
   // Compare using content hash for better performance
   return prevProps.row._contentHash === nextProps.row._contentHash && 
          prevProps.row._isNew === nextProps.row._isNew &&
-         prevProps.row._isModified === nextProps.row._isModified;
+         prevProps.row._isModified === nextProps.row._isModified &&
+         prevProps.isEditing === nextProps.isEditing;
 });
 
 MemoizedTableRow.displayName = 'MemoizedTableRow';
@@ -128,6 +200,9 @@ const GlobeFund: React.FC = () => {
     key: '',
     direction: 'asc'
   });
+
+  // Editing state
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
 
   // Store the last fetched data to compare for changes
   const lastFetchedDataRef = useRef<{
@@ -195,6 +270,97 @@ const GlobeFund: React.FC = () => {
       return processedRow;
     });
   }, [generateRowId, generateContentHash]);
+
+  // Update globe allocated amount via webhook
+  const updateGlobeAllocatedAmount = async (rowData: GlobeData, newAllocated: number) => {
+    try {
+      const response = await fetch('https://n8n.gopocket.in/webhook/updateglobe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...rowData,
+          allocated: newAllocated.toString(),
+          modified: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error updating globe allocated amount:', error);
+      throw error;
+    }
+  };
+
+  // Handle start editing
+  const handleStartEdit = useCallback((rowId: string, currentValue: number) => {
+    setEditingRowId(rowId);
+  }, []);
+
+// Handle save edited amount
+const handleSaveEdit = useCallback(async (rowId: string, newAllocated: number, rowData: GlobeData) => {
+  try {
+    setIsLoading(true);
+    
+    // Send update to webhook
+    const result = await updateGlobeAllocatedAmount(rowData, newAllocated);
+    
+    if (result && Array.isArray(result) && result.length > 0) {
+      const updatedRecord = result[0];
+      
+      // Update local state with the response data directly
+      const updateData = (data: GlobeData[]) => 
+        data.map(row => 
+          row._id === rowId 
+            ? { 
+                ...updatedRecord,
+                _id: rowId, // Keep the same ID
+                _contentHash: generateContentHash(updatedRecord),
+                _isModified: true
+              } 
+            : row
+        );
+
+      if (activeTab === 'nse') {
+        setNseGlobeData(prev => updateData(prev));
+      } else {
+        setMcxGlobeData(prev => updateData(prev));
+      }
+
+      setEditingRowId(null);
+      
+      // Show success toast with clicode
+      const clicode = updatedRecord.clicode || 'record';
+      toast({
+        title: "Update Successful",
+        description: `Allocated amount updated for ${clicode}`,
+      });
+    } else {
+      throw new Error('Invalid response from server');
+    }
+
+  } catch (error) {
+    console.error('Error saving edit:', error);
+    toast({
+      title: "Update Failed",
+      description: "Failed to update allocated amount. Please try again.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, [activeTab, generateContentHash]);
+
+  // Handle cancel editing
+  const handleCancelEdit = useCallback(() => {
+    setEditingRowId(null);
+  }, []);
 
   // Load cached data on mount
   useEffect(() => {
@@ -828,7 +994,12 @@ const GlobeFund: React.FC = () => {
                       </TableRow>
                     ) : (
                       filteredData.map((row) => (
-                        <MemoizedTableRow key={row._id} row={row} />
+                        <MemoizedTableRow key={row._id} 
+                        row={row} 
+                        isEditing={editingRowId === row._id}
+                        onStartEdit={handleStartEdit}
+                        onSaveEdit={handleSaveEdit}
+                        onCancelEdit={handleCancelEdit} />
                       ))
                     )}
                   </TableBody>
