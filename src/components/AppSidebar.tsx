@@ -100,7 +100,7 @@ const allMenuItems = [
     url: '/payout',
     icon: IndianRupee,
     color: 'text-teal-600',
-    roles: ['Risk Manager', 'Analyst', 'Banking'] // All roles can see payout
+    roles: ['Risk Manager', 'Analyst', 'banking'] // All roles can see payout
   },
   {
     title: 'Settings',
@@ -108,6 +108,13 @@ const allMenuItems = [
     icon: Settings,
     color: 'text-slate-600',
     roles: ['Risk Manager'] // Only Risk Manager
+  },
+  {
+    title: 'Segregation',
+    url: '/segregation',
+    icon: CheckSquare,
+    color: 'text-teal-600',
+    roles: ['Risk Manager', 'Analyst', 'banking'] // Only Risk Manager and Analyst
   },
 ];
 

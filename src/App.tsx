@@ -18,6 +18,7 @@ import Mcx from './components/Mcx';
 import MorningIntersegment from './components/MorningIntersegment';
 import RealtimeFund from './components/RealtimeFund';
 import GlobeFund from './components/Globe';
+import Segregation from './components/segregation';
 
 const queryClient = new QueryClient();
 
@@ -25,27 +26,49 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { isAuthenticated } = useAuth();
   
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return <Navigate to="/login" />;
   }
   
   return <Layout>{children}</Layout>;
 };
 
+// Add role-based redirection logic
+const getDefaultRoute = (role: string | undefined) => {
+  switch (role) {
+    case 'banking':
+      return '/segregation';
+    default:
+      return '/dashboard';
+  }
+};
+
 const AppContent = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth(); // Add user to destructuring
 
   return (
     <BrowserRouter>
       <Routes>
         <Route 
           path="/login" 
-          element={isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />} 
+          element={
+            isAuthenticated ? 
+              <Navigate to={getDefaultRoute(user?.role)} /> : 
+              <LoginPage />
+          } 
         />
         <Route 
           path="/dashboard" 
           element={
             <ProtectedRoute>
               <RealtimeFund />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/segregation" 
+          element={
+            <ProtectedRoute>
+              <Segregation />
             </ProtectedRoute>
           } 
         />
@@ -195,7 +218,7 @@ const AppContent = () => {
             </ProtectedRoute>
           } 
         />
-        <Route path="/" element={<Navigate to="/dashboard" />} />
+         <Route path="/" element={<Navigate to={isAuthenticated ? getDefaultRoute(user?.role) : "/login"} />} />
       </Routes>
     </BrowserRouter>
   );

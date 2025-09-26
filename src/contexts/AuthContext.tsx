@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const validCredentials = [
       { username: 'admin', password: 'admin123', role: 'Risk Manager' },
       { username: 'user', password: 'user123', role: 'Analyst' },
-      { username: 'banking', password: 'banking123', role: 'Banking' }
+      { username: 'banking', password: 'banking123', role: 'banking' }
     ];
 
     const validUser = validCredentials.find(
