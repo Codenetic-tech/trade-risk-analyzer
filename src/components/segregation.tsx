@@ -550,10 +550,11 @@ const Segregation: React.FC = () => {
                   <SortableHeader field="Derivative" className="text-right">Derivative</SortableHeader>
                   <SortableHeader field="Equities" className="text-right">Equities</SortableHeader>
                   <SortableHeader field="MCX" className="text-right">MCX Ledger</SortableHeader>
-                  <SortableHeader field="Total" className="text-right">Total</SortableHeader>
+                  <SortableHeader field="Total" className="text-right bg-red-50">Total</SortableHeader>
                   <SortableHeader field="NSEFO" className="text-right">NSE FO</SortableHeader>
                   <SortableHeader field="NSECM" className="text-right">NSE CM</SortableHeader>
                   <SortableHeader field="MCXFile" className="text-right">MCX File</SortableHeader>
+                  <SortableHeader field="MCXFile" className="text-right bg-blue-50">Alloc Total</SortableHeader>
                   <SortableHeader field="Remaining" className="text-right">Remaining</SortableHeader>
                   <SortableHeader field="FODiff" className="text-right">FO DIFF</SortableHeader>
                   <SortableHeader field="CMDiff" className="text-right">CM DIFF</SortableHeader>
@@ -607,10 +608,11 @@ const Segregation: React.FC = () => {
                       <TableCell className="text-right font-mono">{formatNumber(row.Derivative)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.Equities)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.MCX)}</TableCell>
-                      <TableCell className="text-right font-mono font-bold">{formatNumber(row.Total)}</TableCell>
+                      <TableCell className="text-right font-mono font-bold text-red-600 bg-red-50">{formatNumber(row.Total)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.NSEFO)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.NSECM)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.MCXFile)}</TableCell>
+                      <TableCell className="text-right font-mono font-bold text-blue-600 bg-blue-50">{formatNumber(row.AllocationTotal)}</TableCell>
                       <TableCell className={`text-right font-mono ${row.Remaining !== 0 ? 'font-bold text-amber-600' : ''}`}>
                         {formatNumber(row.Remaining)}
                       </TableCell>

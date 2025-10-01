@@ -503,7 +503,7 @@ export const processSegregationData = async (files: File[]): Promise<Segregation
   
   console.log('Total unique UCCs found:', allUCCs.size);
   
-  const segregationData: SegregationData[] = [];
+  const segregationDatawithoutfilter: SegregationData[] = [];
   
   for (const ucc of allUCCs) {
     const ledger = ledgerData[ucc] || {
@@ -524,14 +524,14 @@ export const processSegregationData = async (files: File[]): Promise<Segregation
     const foDiff = ledger.derivative - nseFO;
     const cmDiff = ledger.equities - nseCM;
     const mcxDiff = ledger.mcx - mcxFile;
-    const allocationTotal = nseCM + nseFO + mcxFile + remaining;
+    const allocationTotal = nseCM + nseFO + mcxFile;
     
     // Calculate status based on comparison (allow small rounding differences)
     const totalFromFiles = nseCM + nseFO + mcxFile + remaining;
     const difference = Math.abs(ledger.total - totalFromFiles);
     const status: 'OK' | 'Not OK' = difference < 1.00 ? 'OK' : 'Not OK';
     
-    segregationData.push({
+    segregationDatawithoutfilter.push({
       UCC: ucc,
       ClientName: ledger.clientName,
       Currencies: ledger.currencies,
@@ -552,10 +552,54 @@ export const processSegregationData = async (files: File[]): Promise<Segregation
   }
   
   // Sort by UCC
-  segregationData.sort((a, b) => a.UCC.localeCompare(b.UCC));
+  segregationDatawithoutfilter.sort((a, b) => a.UCC.localeCompare(b.UCC));
   
-  console.log('Final segregation data:', segregationData.length, 'records');
-  return segregationData;
+ // Apply filters: 
+// 1. Remove records where AllocationTotal = 0 
+// 2. Remove records where any two differences are 0 (not necessarily all three)
+// 3. Remove records where ledger values are less than allocation values
+// 4. Remove records where at least two segment differences are negative
+const SegregationData = segregationDatawithoutfilter.filter(row => {
+  // Count how many differences are zero
+  const zeroDiffCount = [row.FODiff, row.CMDiff, row.MCXDiff]
+    .filter(diff => Math.abs(diff) < 0.01).length;
+
+  // Check if any two differences are zero (>= 2)
+  const hasTwoZeroDiffs = zeroDiffCount >= 2;
+
+  // Count negatives
+  const negativeCount = [row.FODiff, row.CMDiff, row.MCXDiff]
+    .filter(diff => diff < 0).length;
+
+  const hasTwoNegatives = negativeCount >= 2;
+
+  const shouldKeep = 
+    row.AllocationTotal !== 0 && 
+    !hasTwoZeroDiffs &&
+    !hasTwoNegatives;
+
+  if (!shouldKeep) {
+    console.log(`Filtering out UCC ${row.UCC}:`, {
+      AllocationTotal: row.AllocationTotal,
+      FODiff: row.FODiff,
+      CMDiff: row.CMDiff,
+      MCXDiff: row.MCXDiff,
+      zeroDiffCount,
+      hasTwoZeroDiffs,
+      negativeCount,
+      hasTwoNegatives
+    });
+  }
+
+  return shouldKeep;
+});
+
+  
+  console.log('Final segregation data after filtering:', SegregationData.length, 'records');
+  console.log('Records filtered out:', segregationDatawithoutfilter.length - SegregationData.length);
+  
+  // Return the filtered data that will be used in frontend
+  return SegregationData;
 };
 
 export const exportSegregationData = (segregationData: SegregationData[]) => {
@@ -570,8 +614,8 @@ export const exportSegregationData = (segregationData: SegregationData[]) => {
     'NSE CM': row.NSECM,
     'NSE FO': row.NSEFO,
     'MCX File': row.MCXFile,
-    Remaining: row.Remaining,
     'Allocation Total': row.AllocationTotal,
+    Remaining: row.Remaining,
     'FO Diff': row.FODiff,
     'CM Diff': row.CMDiff,
     'MCX Diff': row.MCXDiff
