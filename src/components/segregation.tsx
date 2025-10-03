@@ -49,6 +49,7 @@ export interface SegregationData {
   CMDiff: number;
   MCXDiff: number;
   Status: 'OK' | 'Not OK';
+  Epay: number;
 }
 
 type SortField = keyof SegregationData;
@@ -559,6 +560,7 @@ const Segregation: React.FC = () => {
                   <SortableHeader field="FODiff" className="text-right">FO DIFF</SortableHeader>
                   <SortableHeader field="CMDiff" className="text-right">CM DIFF</SortableHeader>
                   <SortableHeader field="MCXDiff" className="text-right">MCX DIFF</SortableHeader>
+                  <SortableHeader field="MCXDiff" className="text-right">Epay</SortableHeader>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -619,6 +621,9 @@ const Segregation: React.FC = () => {
                       <TableCell className="text-right font-mono">{formatNumber(row.FODiff)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.CMDiff)}</TableCell>
                       <TableCell className="text-right font-mono">{formatNumber(row.MCXDiff)}</TableCell>
+                      <TableCell className={`text-right font-mono ${row.Epay !== 0 ? 'font-bold text-amber-600' : ''}`}>
+                        {formatNumber(row.Epay)}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}

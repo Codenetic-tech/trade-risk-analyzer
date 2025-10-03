@@ -17,6 +17,7 @@ export interface SegregationData {
   CMDiff: number;
   MCXDiff: number;
   Status: 'OK' | 'Not OK';
+  Epay: number;
 }
 
 export interface LedgerSegregationData {
@@ -27,9 +28,11 @@ export interface LedgerSegregationData {
     equities: number;
     mcx: number;
     total: number;
+    epay: number;
   };
 }
 
+// Update the parseLedgerExcel function to correctly extract Epay from the "Adjusted Epay Ledger Bal" column
 export const parseLedgerExcel = async (file: File): Promise<LedgerSegregationData> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -134,12 +137,72 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerSegregationDat
         if (finalBalanceIndex === -1) {
           finalBalanceIndex = 4; // Column E
         }
+
+        // CORRECTED: Find Epay column - look for "adjusted epay ledger bal"
+        let epayIndex = headers.findIndex(h => 
+          h.includes('adjusted') && h.includes('epay') && h.includes('ledger bal')
+        );
+        
+        // If specific Epay column not found, try broader search
+        if (epayIndex === -1) {
+          epayIndex = headers.findIndex(h => 
+            h.includes('adjusted epay')
+          );
+        }
+        
+        if (epayIndex === -1) {
+          epayIndex = headers.findIndex(h => 
+            h.includes('epay ledger')
+          );
+        }
+        
+        if (epayIndex === -1) {
+          epayIndex = headers.findIndex(h => 
+            h.includes('epay') && h.includes('ledger')
+          );
+        }
+        
+        // Based on your sample data structure, let's try to find the exact column
+        // Looking at your headers, "Adjusted Epay Ledger Bal" should be around index 13-14
+        if (epayIndex === -1) {
+          // Let's check which column has the exact header pattern
+          for (let i = 0; i < headers.length; i++) {
+            if (headers[i].includes('adjusted') && headers[i].includes('epay') && headers[i].includes('ledger bal')) {
+              epayIndex = i;
+              console.log(`Found Epay column at index ${i}: ${headers[i]}`);
+              break;
+            }
+          }
+        }
+        
+        // Final fallback: try common positions
+        if (epayIndex === -1) {
+          // Try column N (index 13) first
+          if (headers.length > 13 && headers[13] && headers[13].includes('epay')) {
+            epayIndex = 13;
+          } 
+          // Try column M (index 12)
+          else if (headers.length > 12 && headers[12] && headers[12].includes('epay')) {
+            epayIndex = 12;
+          }
+          // Try column O (index 14)
+          else if (headers.length > 14 && headers[14] && headers[14].includes('epay')) {
+            epayIndex = 14;
+          }
+          else {
+            // Default to column N (index 13) as last resort
+            epayIndex = 13;
+            console.warn('Epay column not found in headers, defaulting to column N (index 13)');
+          }
+        }
         
         console.log('Column indices:');
-        console.log('UCC:', uccIndex, '(Column A)');
-        console.log('Client:', clientIndex, '(Column B)'); 
-        console.log('Segment:', segmentIndex, '(Column D)');
-        console.log('Balance:', finalBalanceIndex, '(Column E)');
+        console.log('UCC:', uccIndex, '(Column', String.fromCharCode(65 + uccIndex) + ')');
+        console.log('Client:', clientIndex, '(Column', String.fromCharCode(65 + clientIndex) + ')'); 
+        console.log('Segment:', segmentIndex, '(Column', String.fromCharCode(65 + segmentIndex) + ')');
+        console.log('Balance:', finalBalanceIndex, '(Column', String.fromCharCode(65 + finalBalanceIndex) + ')');
+        console.log('Epay:', epayIndex, '(Column', String.fromCharCode(65 + epayIndex) + ')');
+        console.log('Epay header text:', headers[epayIndex]);
         
         if (uccIndex === -1) {
           throw new Error('UCC column not found in the Excel file');
@@ -177,8 +240,34 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerSegregationDat
               }
             }
           }
+
+          // CORRECTED: Parse Epay value with better extraction
+          let epay = 0;
+          if (epayIndex < row.length && row[epayIndex] !== null && row[epayIndex] !== undefined) {
+            const epayValue = row[epayIndex];
+            
+            // Debug logging for Epay extraction
+            console.log(`Row ${i} - UCC ${ucc} - Epay raw value:`, epayValue, typeof epayValue);
+            
+            if (typeof epayValue === 'number') {
+              epay = Math.abs(epayValue);
+            } else {
+              const epayStr = String(epayValue).replace(/[#,\s]/g, '');
+              if (epayStr && epayStr !== '' && !isNaN(parseFloat(epayStr))) {
+                epay = Math.abs(parseFloat(epayStr));
+              }
+            }
+          }
           
-          console.log(`Processing row ${i}:`, { ucc, clientName, segment, balance });
+          console.log(`Processing row ${i}:`, { 
+            ucc, 
+            clientName, 
+            segment, 
+            balance, 
+            epay,
+            epayIndex,
+            hasEpayValue: epay > 0
+          });
           
           // Skip rows with invalid data
           if (!ucc || balance === 0) continue;
@@ -191,11 +280,19 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerSegregationDat
               derivative: 0,
               equities: 0,
               mcx: 0,
-              total: 0
+              total: 0,
+              epay: epay // Set initial epay value
             };
-          } else if (clientName && !ledgerData[ucc].clientName) {
+          } else {
             // Update client name if it was empty
-            ledgerData[ucc].clientName = clientName;
+            if (clientName && !ledgerData[ucc].clientName) {
+              ledgerData[ucc].clientName = clientName;
+            }
+            // Update epay if current row has a non-zero epay value
+            // This ensures we capture the epay value from the equities row
+            if (epay > 0) {
+              ledgerData[ucc].epay = epay;
+            }
           }
           
           // Map segment to appropriate field with flexible matching
@@ -205,6 +302,10 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerSegregationDat
             ledgerData[ucc].derivative += balance;
           } else if (segment.includes('equit') || segment.includes('nse') || segment.includes('cash')) {
             ledgerData[ucc].equities += balance;
+            // For equities segment, also ensure we capture the epay value
+            if (epay > 0) {
+              ledgerData[ucc].epay = epay;
+            }
           } else if (segment.includes('mcx') || segment.includes('mcfo')) {
             ledgerData[ucc].mcx += balance;
           } else {
@@ -220,7 +321,19 @@ export const parseLedgerExcel = async (file: File): Promise<LedgerSegregationDat
           data.total = data.currencies + data.derivative + data.equities + data.mcx;
         });
         
-        console.log('Successfully parsed ledger data:', ledgerData);
+        console.log('Successfully parsed ledger data with Epay values:');
+        Object.keys(ledgerData).forEach(ucc => {
+          console.log(`UCC ${ucc}:`, {
+            clientName: ledgerData[ucc].clientName,
+            equities: ledgerData[ucc].equities,
+            derivative: ledgerData[ucc].derivative,
+            currencies: ledgerData[ucc].currencies,
+            mcx: ledgerData[ucc].mcx,
+            total: ledgerData[ucc].total,
+            epay: ledgerData[ucc].epay
+          });
+        });
+        
         console.log('Total UCCs processed:', Object.keys(ledgerData).length);
         
         resolve(ledgerData);
@@ -450,6 +563,7 @@ export const parseRemainingExcel = async (file: File): Promise<{[key: string]: n
   });
 };
 
+// Update the processSegregationData function to include the validation
 export const processSegregationData = async (files: File[]): Promise<SegregationData[]> => {
   if (!files || files.length === 0) {
     throw new Error("Please select all required files");
@@ -505,6 +619,9 @@ export const processSegregationData = async (files: File[]): Promise<Segregation
   
   const segregationDatawithoutfilter: SegregationData[] = [];
   
+  // NEW: Track destructive errors
+  const destructiveErrors: string[] = [];
+  
   for (const ucc of allUCCs) {
     const ledger = ledgerData[ucc] || {
       clientName: '',
@@ -512,7 +629,8 @@ export const processSegregationData = async (files: File[]): Promise<Segregation
       derivative: 0,
       equities: 0,
       mcx: 0,
-      total: 0
+      total: 0,
+      epay: 0
     };
     
     const nseCM = nseCMData[ucc] || 0;
@@ -547,52 +665,79 @@ export const processSegregationData = async (files: File[]): Promise<Segregation
       FODiff: foDiff,
       CMDiff: cmDiff,
       MCXDiff: mcxDiff,
-      Status: status
+      Status: status,
+      Epay: ledger.epay
     });
   }
   
   // Sort by UCC
   segregationDatawithoutfilter.sort((a, b) => a.UCC.localeCompare(b.UCC));
   
- // Apply filters: 
-// 1. Remove records where AllocationTotal = 0 
-// 2. Remove records where any two differences are 0 (not necessarily all three)
-// 3. Remove records where ledger values are less than allocation values
-// 4. Remove records where at least two segment differences are negative
-const SegregationData = segregationDatawithoutfilter.filter(row => {
-  // Count how many differences are zero
-  const zeroDiffCount = [row.FODiff, row.CMDiff, row.MCXDiff]
-    .filter(diff => Math.abs(diff) < 0.01).length;
-
-  // Check if any two differences are zero (>= 2)
-  const hasTwoZeroDiffs = zeroDiffCount >= 2;
-
-  // Count negatives
-  const negativeCount = [row.FODiff, row.CMDiff, row.MCXDiff]
-    .filter(diff => diff < 0).length;
-
-  const hasTwoNegatives = negativeCount >= 2;
-
-  const shouldKeep = 
-    row.AllocationTotal !== 0 && 
-    !hasTwoZeroDiffs &&
-    !hasTwoNegatives;
-
-  if (!shouldKeep) {
-    console.log(`Filtering out UCC ${row.UCC}:`, {
-      AllocationTotal: row.AllocationTotal,
-      FODiff: row.FODiff,
-      CMDiff: row.CMDiff,
-      MCXDiff: row.MCXDiff,
-      zeroDiffCount,
-      hasTwoZeroDiffs,
-      negativeCount,
-      hasTwoNegatives
-    });
+  // NEW: Check for destructive errors before filtering
+  for (const row of segregationDatawithoutfilter) {
+    const allDiffsZero = 
+      Math.abs(row.FODiff) < 0.01 && 
+      Math.abs(row.CMDiff) < 0.01 && 
+      Math.abs(row.MCXDiff) < 0.01;
+    
+    if (allDiffsZero && row.Remaining > 0) {
+      destructiveErrors.push(`UCC ${row.UCC} has all differences zero but Remaining value is ${row.Remaining}`);
+    }
   }
+  
+  // If destructive errors found, throw error
+  if (destructiveErrors.length > 0) {
+    const errorMessage = `ERROR IN REMAINING FILE: \n${destructiveErrors.join('\n')}\n\nThis indicates data inconsistency. Please check the Remaining file.`;
+    console.error('Destructive error found:', errorMessage);
+    throw new Error(errorMessage);
+  }
+  
+  // Apply filters: 
+  // 1. Remove records where AllocationTotal = 0 
+  // 2. Remove records where any two differences are 0 (not necessarily all three)
+  // 3. Remove records where ledger values are less than allocation values
+  // 4. Remove records where at least two segment differences are negative
+  const SegregationData = segregationDatawithoutfilter.filter(row => {
+    // Count how many differences are zero
+    const zeroDiffCount = [row.FODiff, row.CMDiff, row.MCXDiff]
+      .filter(diff => Math.abs(diff) < 0.01).length;
 
-  return shouldKeep;
-});
+    // Check if any two differences are zero (>= 2)
+    const hasTwoZeroDiffs = zeroDiffCount >= 2;
+
+    // Count negatives
+    const negativeCount = [row.FODiff, row.CMDiff, row.MCXDiff]
+      .filter(diff => diff < 0).length;
+
+    const hasTwoNegatives = negativeCount >= 2;
+
+    // Base filter rules
+    const shouldKeep = 
+      row.AllocationTotal !== 0 && 
+      !hasTwoZeroDiffs &&
+      !hasTwoNegatives;
+
+    // ✅ Override: if Remaining > 0, always keep
+    if (row.Remaining > 0) {
+      return true;
+    }
+
+    if (!shouldKeep) {
+      console.log(`Filtering out UCC ${row.UCC}:`, {
+        AllocationTotal: row.AllocationTotal,
+        FODiff: row.FODiff,
+        CMDiff: row.CMDiff,
+        MCXDiff: row.MCXDiff,
+        zeroDiffCount,
+        hasTwoZeroDiffs,
+        negativeCount,
+        hasTwoNegatives,
+        Remaining: row.Remaining
+      });
+    }
+
+    return shouldKeep;
+  });
 
   
   console.log('Final segregation data after filtering:', SegregationData.length, 'records');
@@ -618,7 +763,8 @@ export const exportSegregationData = (segregationData: SegregationData[]) => {
     Remaining: row.Remaining,
     'FO Diff': row.FODiff,
     'CM Diff': row.CMDiff,
-    'MCX Diff': row.MCXDiff
+    'MCX Diff': row.MCXDiff,
+    'Epay': row.Epay
   }));
 
   const ws = XLSX.utils.json_to_sheet(exportData);

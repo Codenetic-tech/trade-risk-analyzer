@@ -112,6 +112,60 @@ const Dashboard: React.FC = () => {
     return processedData.summary;
   }, [processedData]);
 
+  // Get current date in DD-MMM-YYYY format
+  const getCurrentDate = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+ const downloadMCXGlobeFile = () => {
+  if (!processedData || processedData.data.length === 0) return;
+
+  // Filter for net short positions (netDiff < 0)
+  const shortData = processedData.data.filter(row => row.netDiff < 0);
+
+  if (shortData.length === 0) {
+    toast({
+      title: "No Short Positions",
+      description: "There are no net short positions to download.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  // Get date for filename (DDMMYYYY)
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const dateString = `${day}${month}${year}`;
+
+  // Generate file content with filtered data
+  const mcxContent = shortData.map(row => {
+    // Use absolute value since netDiff is negative for short positions
+    return `${getCurrentDate()},CO,8090,46365,,${row.ucc},C,${-(row.netDiff)},,,,,,,A`;
+  }).join('\n');
+
+  const header = 'Current Date,Segment Indicator,Clearing Member Code,Trading Member Code,CP Code,Client Code,Account Type,CASH & CASH EQUIVALENT AMOUNT,Filler1,Filler2,Filler3,Filler4,Filler5,Filler6,ACTION\n';
+  const fullContent = header + mcxContent;
+
+  const blob = new Blob([fullContent], { type: 'text/plain' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `MCCLCOLL_46365_${dateString}.040`;
+  link.click();
+  window.URL.revokeObjectURL(url);
+
+  toast({
+    title: "MCX File Downloaded",
+    description: `Generated file with ${shortData.length} short positions`,
+  });
+};
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -244,8 +298,8 @@ const Dashboard: React.FC = () => {
             <CardTitle>
               {processedData ? `Risk Analysis Results (${filteredData.length} records)` : 'Risk Analysis'}
             </CardTitle>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-              <div className="relative">
+            <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+              <div className="relative flex-shrink-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   placeholder="Search UCC or Client..."
@@ -255,9 +309,10 @@ const Dashboard: React.FC = () => {
                   disabled={!processedData}
                 />
               </div>
-              {/* Add the Net Status Filter */}
+              
+              {/* Net Status Filter */}
               <Select value={netStatusFilter} onValueChange={setNetStatusFilter} disabled={!processedData}>
-                <SelectTrigger className="w-full sm:w-32">
+                <SelectTrigger className="w-full sm:w-40">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Net Status" />
                 </SelectTrigger>
@@ -268,8 +323,10 @@ const Dashboard: React.FC = () => {
                   <SelectItem value="SHORT">SHORT</SelectItem>
                 </SelectContent>
               </Select>
+              
+              {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter} disabled={!processedData}>
-                <SelectTrigger className="w-full sm:w-32">
+                <SelectTrigger className="w-full sm:w-40">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
@@ -280,13 +337,24 @@ const Dashboard: React.FC = () => {
                   <SelectItem value="SHORT">SHORT</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Export Button */}
               <Button
                 onClick={() => exportToExcel(filteredData)}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
                 disabled={!processedData}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Export
+                Export Excel
+              </Button>
+              {/* MCX Globe Download Button */}
+              <Button
+                onClick={downloadMCXGlobeFile}
+                className="bg-orange-600 hover:bg-orange-700 text-white whitespace-nowrap"
+                disabled={!processedData}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                MCX Globe
               </Button>
             </div>
           </div>
